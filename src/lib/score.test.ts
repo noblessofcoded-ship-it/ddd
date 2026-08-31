@@ -13,6 +13,7 @@ function lot(overrides: Partial<ParkingLot> = {}): ParkingLot {
     lat: 35.68,
     lng: 139.76,
     named: true,
+    address: null,
     access: 'public',
     operator: null,
     fee: 'unknown',

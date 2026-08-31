@@ -116,10 +116,34 @@ function parseMaxHeight(raw: string | undefined): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+/** 固有名として使える名前。運営者名は含めない */
+function properName(tags: Record<string, string>): string | null {
+  return tags['name:ja'] || tags.name || null;
+}
+
+/**
+ * 画面に出す名前。
+ * 固有名が無くても運営者が分かれば「タイムズ」とだけ出す方が手がかりになる。
+ * ただしこれは場所を特定できないので、named としては数えない。
+ */
 function parseName(tags: Record<string, string>, kind: ParkingKind): string {
-  const name = tags['name:ja'] || tags.name || tags.operator || tags.brand;
+  const name = properName(tags) || tags.operator || tags.brand;
   if (name) return name;
   return kind === 'street-side' ? '路上パーキング' : '駐車場（名称なし）';
+}
+
+/** 駐車場自身の住所。検索語を具体的にするのに使う */
+function parseAddress(tags: Record<string, string>): string | null {
+  const parts = [
+    tags['addr:province'] ?? tags['addr:state'],
+    tags['addr:city'],
+    tags['addr:ward'] ?? tags['addr:suburb'],
+    tags['addr:quarter'] ?? tags['addr:neighbourhood'],
+    tags['addr:block_number'],
+    tags['addr:housenumber'],
+  ].filter((part): part is string => Boolean(part && part.trim()));
+
+  return parts.length > 0 ? [...new Set(parts)].join(' ') : null;
 }
 
 function parseAccess(tags: Record<string, string>): AccessKind {
@@ -154,7 +178,8 @@ export function parseParkingElement(
   return {
     id: `${element.type}/${element.id}`,
     name: parseName(tags, kind),
-    named: Boolean(tags['name:ja'] || tags.name || tags.operator || tags.brand),
+    named: properName(tags) !== null,
+    address: parseAddress(tags),
     access: parseAccess(tags),
     operator: tags.operator ?? tags.brand ?? null,
     lat,

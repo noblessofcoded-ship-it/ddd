@@ -41,8 +41,13 @@ export type ParkingKind =
 export type ParkingLot = LatLng & {
   id: string;
   name: string;
-  /** OSM に名前が登録されていたか。未登録なら name は既定の文言 */
+  /**
+   * 固有の名前が登録されていたか。
+   * 「タイムズ」のような運営者名は、その場所を特定できないので名前とみなさない。
+   */
   named: boolean;
+  /** 駐車場自身の住所（addr:* タグ）。無ければ null */
+  address: string | null;
   /** 利用制限 */
   access: AccessKind;
   /** 運営者・ブランド名 */

@@ -119,6 +119,7 @@ describe('dedupeParking', () => {
     lat: 35.66,
     lng: 139.701,
     named: true,
+    address: null,
     access: 'public',
     operator: null,
     fee: 'unknown',
@@ -222,14 +223,47 @@ describe('parseParkingElement — 一般利用できないものの除外', () =
     expect(el({ access: 'customers' })?.access).toBe('customers');
   });
 
-  it('名前の有無を記録する', () => {
+  it('固有名の有無を記録する', () => {
     expect(el({ name: 'タイムズ心斎橋' })?.named).toBe(true);
     expect(el({})?.named).toBe(false);
-    expect(el({ operator: 'タイムズ24' })?.named).toBe(true);
+    // 運営者名は場所を特定できないので固有名とは扱わない
+    expect(el({ operator: 'タイムズ24' })?.named).toBe(false);
   });
 
   it('運営者を拾う', () => {
     expect(el({ operator: 'タイムズ24' })?.operator).toBe('タイムズ24');
     expect(el({ brand: '三井のリパーク' })?.operator).toBe('三井のリパーク');
+  });
+});
+
+describe('parseParkingElement — 名前と住所', () => {
+  const el = (tags: Record<string, string>) =>
+    parseParkingElement(element({ tags: { amenity: 'parking', ...tags } }), destination);
+
+  it('運営者名は固有名として数えない', () => {
+    // 「タイムズ」だけでは、どのタイムズか特定できない
+    const lot = el({ operator: 'タイムズ' });
+    expect(lot?.name).toBe('タイムズ');
+    expect(lot?.named).toBe(false);
+  });
+
+  it('name タグがあれば固有名とみなす', () => {
+    const lot = el({ name: 'タイムズ宗右衛門町', operator: 'タイムズ' });
+    expect(lot?.named).toBe(true);
+  });
+
+  it('addr:* から住所を組み立てる', () => {
+    const lot = el({
+      'addr:province': '大阪府',
+      'addr:city': '大阪市',
+      'addr:ward': '中央区',
+      'addr:quarter': '宗右衛門町',
+      'addr:block_number': '2',
+    });
+    expect(lot?.address).toBe('大阪府 大阪市 中央区 宗右衛門町 2');
+  });
+
+  it('住所タグが無ければ null', () => {
+    expect(el({})?.address).toBeNull();
   });
 });
