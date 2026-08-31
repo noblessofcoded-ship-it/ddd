@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { formatDuration, formatJpy } from '../lib/fee';
 import { compassDirection, formatDistance } from '../lib/geo';
 import { buildPlaceUrl } from '../lib/googleMaps';
+import { limitStatus, type LimitStatus } from '../lib/vehicle';
 import { buildFeeSearchUrl } from '../lib/webSearch';
+import type { VehicleSize } from '../types';
 import type { RankedParking } from '../types';
 
 type Props = {
@@ -18,6 +20,17 @@ type Props = {
   areaHint?: string | null;
   /** 目的地の座標。駐車場がどちら側にあるかを出すのに使う */
   destination?: { lat: number; lng: number } | null;
+  /** 選んでいる車種。サイズ制限に余裕があるかの判定に使う */
+  vehicle?: VehicleSize | null;
+};
+
+/** サイズ制限の 1 項目 */
+type Limit = { label: string; limitM: number | null; vehicleM: number | null };
+
+const STATUS_CLASS: Record<LimitStatus, string> = {
+  unknown: 'limit--unknown',
+  ok: 'limit--ok',
+  tight: 'limit--tight',
 };
 
 const EASE_TEXT = {
@@ -44,7 +57,14 @@ export function ParkingCard({
   onSaveFee,
   areaHint,
   destination,
+  vehicle,
 }: Props) {
+  const limits: Limit[] = [
+    { label: '車高', limitM: lot.maxHeightM, vehicleM: vehicle?.heightM ?? null },
+    { label: '車幅', limitM: lot.maxWidthM, vehicleM: vehicle?.widthM ?? null },
+    { label: '車長', limitM: lot.maxLengthM, vehicleM: vehicle?.lengthM ?? null },
+  ];
+  const hasAnyLimit = limits.some((limit) => limit.limitM !== null);
   const showsEstimate = lot.fee !== 'free' && lot.estimatedFeeJpy !== null;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(lot.feeSource === 'user' ? (lot.feeNote ?? '') : '');
@@ -94,6 +114,24 @@ export function ParkingCard({
           {showsEstimate && <span className="fee__note">{formatDuration(stayMinutes)}の目安</span>}
           {lot.feeSource === 'user' && <span className="badge">自分で登録</span>}
         </div>
+
+        <div className="limits">
+          <span className="limits__title">サイズ制限</span>
+          {limits.map((limit) => {
+            const status = limitStatus(limit.limitM, limit.vehicleM);
+            return (
+              <span key={limit.label} className={`limit ${STATUS_CLASS[status]}`}>
+                {limit.label} {limit.limitM === null ? '記載なし' : `${limit.limitM}m`}
+                {status === 'tight' && '（ぎりぎり）'}
+              </span>
+            );
+          })}
+        </div>
+        {!hasAnyLimit && (
+          <p className="limits__note">
+            制限が地図データに登録されていないだけで、制限が無いとは限りません。
+          </p>
+        )}
 
         <div className="ease">
           <span className={`ease__label ease__label--${lot.easeLevel}`}>
