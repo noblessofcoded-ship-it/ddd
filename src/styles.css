@@ -655,6 +655,14 @@ body {
   border-left: 1px solid var(--border);
 }
 
+/* どの情報源から何件取れたか。効いているかを確かめられるように出す */
+.sources {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
 .coverage {
   margin: 0;
   font-size: 12px;
