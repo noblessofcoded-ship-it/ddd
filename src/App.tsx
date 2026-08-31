@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchNearbyParking, searchRadiusFor } from './api/overpass';
+import { fetchNearbyParking as fetchYahooParking } from './api/yahooParking';
 import { MapView } from './components/MapView';
 import { ParkingCard } from './components/ParkingCard';
 import { ParkingFilterBar } from './components/ParkingFilterBar';
@@ -10,6 +11,7 @@ import { reverseGeocode } from './api/photon';
 import { buildPlaceUrl } from './lib/googleMaps';
 import { YahooSettings } from './components/YahooSettings';
 import { applyFeeNotes, loadFeeNotes, saveFeeNote, type FeeNotes } from './lib/feeStore';
+import { mergeParking } from './lib/mergeParking';
 import { loadYahooAppId, saveYahooAppId } from './lib/settings';
 import { rankParking } from './lib/score';
 import {
@@ -80,9 +82,15 @@ export default function App() {
     setError(null);
 
     try {
-      const found = await fetchNearbyParking(target, radius, { signal: controller.signal });
+      // 片方が落ちても、もう片方の結果で案内は続けられるようにする
+      const [osmLots, yahooLots] = await Promise.all([
+        fetchNearbyParking(target, radius, { signal: controller.signal }),
+        fetchYahooParking(target, radius, yahooAppId, { signal: controller.signal }).catch(
+          () => [],
+        ),
+      ]);
       if (controller.signal.aborted) return;
-      setLots(found);
+      setLots(mergeParking(osmLots, yahooLots));
       setSearchedRadiusM(radius);
       setSearched(true);
     } catch (cause) {
@@ -93,7 +101,7 @@ export default function App() {
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, []);
+  }, [yahooAppId]);
 
   // 目的地やレコメンドの ON/OFF が変わったら、前回の検索結果は捨てる
   useEffect(() => {

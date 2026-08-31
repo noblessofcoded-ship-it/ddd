@@ -118,6 +118,7 @@ describe('dedupeParking', () => {
     name: '中央駐車場',
     lat: 35.66,
     lng: 139.701,
+    source: 'osm',
     named: true,
     address: null,
     access: 'public',

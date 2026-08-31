@@ -7,6 +7,7 @@ function lot(overrides: Partial<ParkingLot> = {}): ParkingLot {
   return {
     id: 'node/1',
     name: 'タイムズ宗右衛門町',
+    source: 'osm',
     named: true,
     address: null,
     access: 'public',
