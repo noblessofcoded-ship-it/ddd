@@ -333,3 +333,55 @@ describe('searchPlaces — 現在地から離れた地点', () => {
     expect(result.places.map((p) => p.name)).toEqual(['神楽亭']);
   });
 });
+
+describe('searchPlaces — 正式名称の一部で探す', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
+  afterEach(() => vi.unstubAllGlobals());
+
+  /**
+   * 「肉の天満屋 神楽亭」を「神楽亭」で引く状況。
+   * ジオコーダは語の単位でしか一致を見ないので、名前の途中や末尾だけを
+   * 与えても当たらないことがある。部分一致は Overpass の正規表現に頼る。
+   */
+  it('ジオコーダが空でも、地図データの部分一致で見つける', async () => {
+    const calls = stubFetch((url) => {
+      if (url.includes('interpreter')) return overpassResponse(['肉の天満屋 神楽亭']);
+      return url.includes('photon') ? { features: [] } : [];
+    });
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA });
+
+    expect(calls.some((c) => c.startsWith('overpass:'))).toBe(true);
+    expect(result.places.map((p) => p.name)).toEqual(['肉の天満屋 神楽亭']);
+    expect(result.usedNameSearch).toBe(true);
+  });
+
+  it('名前の一部でも「当たり」として扱う（雑音として落とさない）', async () => {
+    stubFetch((url) => {
+      if (url.includes('photon')) return photonResponse(['肉の天満屋 神楽亭', '無関係な店']);
+      return [];
+    });
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA });
+    expect(result.places.map((p) => p.name)).toEqual(['肉の天満屋 神楽亭']);
+  });
+
+  it('現在地が無いと部分一致の検索まで進めないことを結果で示す', async () => {
+    stubFetch((url) => (url.includes('photon') ? { features: [] } : []));
+
+    const result = await searchPlaces('神楽亭');
+
+    expect(result.places).toEqual([]);
+    expect(result.usedNameSearch).toBe(false);
+  });
+
+  it('現在地があれば部分一致の検索まで進んだことを示す', async () => {
+    stubFetch((url) => {
+      if (url.includes('interpreter')) return { elements: [] };
+      return url.includes('photon') ? { features: [] } : [];
+    });
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA });
+    expect(result.usedNameSearch).toBe(true);
+  });
+});

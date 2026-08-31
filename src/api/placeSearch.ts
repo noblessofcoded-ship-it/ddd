@@ -24,6 +24,12 @@ export type PlaceSearchResult = {
   triedQueries: string[];
   /** 語を落とすか地図データ直引きに頼った */
   relaxed: boolean;
+  /**
+   * 地図データの名称検索（部分一致）まで進んだか。
+   * ジオコーダは語の単位でしか一致を見ないため、「肉の天満屋 神楽亭」を
+   * 「神楽亭」で引くにはこの経路が要る。現在地が無いと範囲を絞れず使えない。
+   */
+  usedNameSearch: boolean;
 };
 
 /** 同一地点とみなす距離。同じ店が複数サービスから返るため */
@@ -105,13 +111,15 @@ export async function searchPlaces(
   const { signal, near = null, limit = 12, onPartial } = options;
   const normalized = normalizeQuery(rawQuery);
   if (normalized.length === 0) {
-    return { places: [], triedQueries: [], relaxed: false };
+    return { places: [], triedQueries: [], relaxed: false, usedNameSearch: false };
   }
 
   const tokens = tokenize(rawQuery);
   const variants = buildQueryVariants(rawQuery);
   const triedQueries: string[] = [];
   let collected: Place[] = [];
+
+  let usedNameSearch = false;
 
   /** 今ある結果を整えて返す。途中経過の通知にも使う */
   const shape = (relaxed: boolean): PlaceSearchResult => {
@@ -122,6 +130,7 @@ export async function searchPlaces(
       places: (relevant.length > 0 ? relevant : ranked).slice(0, limit),
       triedQueries: [...triedQueries],
       relaxed,
+      usedNameSearch,
     };
   };
 
@@ -159,13 +168,10 @@ export async function searchPlaces(
 
   // ジオコーダが名前の合うものを出せなかったときの最終手段。
   // 範囲を絞らないと重すぎるので、基準点が分かっているときだけ使える
-  let usedNameSearch = false;
   if (near && !signal?.aborted && !hasRelevantHit(collected, tokens)) {
+    usedNameSearch = true;
     const byName = await settled(searchPlacesByName(tokens, near, { signal }));
-    if (byName.length > 0) {
-      collected = mergePlaces([collected, byName]);
-      usedNameSearch = true;
-    }
+    if (byName.length > 0) collected = mergePlaces([collected, byName]);
   }
 
   return shape(attemptsRun > 1 || usedNameSearch);

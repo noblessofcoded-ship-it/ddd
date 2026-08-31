@@ -170,6 +170,16 @@ export default function App() {
             }
             fallback={(query) => (
               <div className="notfound__actions">
+                {!searchOrigin && (
+                  <button
+                    type="button"
+                    className="btn btn--primary notfound__wide"
+                    onClick={currentLocation.request}
+                    disabled={currentLocation.loading}
+                  >
+                    {currentLocation.loading ? '取得中…' : '現在地を使って探し直す'}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn btn--ghost"
