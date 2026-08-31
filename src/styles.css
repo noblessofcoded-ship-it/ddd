@@ -175,20 +175,6 @@ body {
   color: var(--danger);
 }
 
-.btn--search {
-  flex: 0 0 auto;
-  background: var(--brand);
-  border-color: var(--brand);
-  color: #fff;
-  font-weight: 700;
-}
-.btn--search:disabled {
-  background: #cbd5e1;
-  border-color: #cbd5e1;
-  color: #fff;
-  opacity: 1;
-}
-
 .notfound {
   border: 1px solid #fde68a;
   background: #fffbeb;

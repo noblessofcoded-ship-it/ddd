@@ -39,7 +39,7 @@ export async function searchPlaces(
 
   // 現在地が分かっていれば周辺を優先する。bounded=0 なので範囲外も落とさない
   if (options.near) {
-    const span = 0.5; // 緯度経度で約 55km
+    const span = 0.25; // 緯度経度で約 28km。広すぎると近所の店が埋もれる
     const { lat, lng } = options.near;
     params.set('viewbox', [lng - span, lat + span, lng + span, lat - span].join(','));
     params.set('bounded', '0');

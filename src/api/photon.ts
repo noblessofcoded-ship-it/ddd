@@ -56,9 +56,11 @@ export async function searchPlaces(
   if (options.near) {
     params.set('lat', String(options.near.lat));
     params.set('lon', String(options.near.lng));
-    // 近さを重視しつつ、有名な地点も拾えるよう中間的な値にする
-    params.set('location_bias_scale', '0.3');
-    params.set('zoom', '12');
+    // location_bias_scale は小さいほど「有名さ」より「近さ」を優先する。
+    // 目当ての店は近所にある前提のアプリなので、かなり近さ寄りに倒す。
+    params.set('location_bias_scale', '0.1');
+    // zoom は絞り込みの強さ。13 でおおよそ市街地スケール
+    params.set('zoom', '13');
   }
 
   const response = await fetch(`${ENDPOINT}?${params.toString()}`, {
