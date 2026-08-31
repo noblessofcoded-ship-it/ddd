@@ -10,6 +10,12 @@ export type PlaceSearchOptions = {
   /** 現在地。近い順に並べ替え、各サービスの検索も周辺優先にする */
   near?: LatLng | null;
   limit?: number;
+  /**
+   * 途中経過を受け取る。
+   * 語を落とす再検索や Overpass の直引きは時間がかかるので、
+   * 速い経路の結果を先に描いておき、後から差し替えるために使う。
+   */
+  onPartial?: (result: PlaceSearchResult) => void;
 };
 
 export type PlaceSearchResult = {
@@ -96,7 +102,7 @@ export async function searchPlaces(
   rawQuery: string,
   options: PlaceSearchOptions = {},
 ): Promise<PlaceSearchResult> {
-  const { signal, near = null, limit = 12 } = options;
+  const { signal, near = null, limit = 12, onPartial } = options;
   const normalized = normalizeQuery(rawQuery);
   if (normalized.length === 0) {
     return { places: [], triedQueries: [], relaxed: false };
@@ -106,6 +112,18 @@ export async function searchPlaces(
   const variants = buildQueryVariants(rawQuery);
   const triedQueries: string[] = [];
   let collected: Place[] = [];
+
+  /** 今ある結果を整えて返す。途中経過の通知にも使う */
+  const shape = (relaxed: boolean): PlaceSearchResult => {
+    const ranked = rankPlaces(collected, tokens, near);
+    // 名前の合うものが 1 件でもあるなら、合わないものは雑音なので落とす
+    const relevant = ranked.filter((place) => isRelevant(place.name, tokens));
+    return {
+      places: (relevant.length > 0 ? relevant : ranked).slice(0, limit),
+      triedQueries: [...triedQueries],
+      relaxed,
+    };
+  };
 
   // 語を落としながら最大 2 巡。これ以上広げても精度より負荷が勝る
   for (const variant of variants.slice(0, 2)) {
@@ -118,6 +136,9 @@ export async function searchPlaces(
     collected = mergePlaces([collected, photon, nominatim]);
 
     if (hasRelevantHit(collected, tokens) || signal?.aborted) break;
+
+    // 当たりが無いので次の手に進むが、今ある結果は先に見せておく
+    if (collected.length > 0 && !signal?.aborted) onPartial?.(shape(true));
   }
 
   // ジオコーダが名前の合うものを出せなかったときの最終手段
@@ -130,15 +151,5 @@ export async function searchPlaces(
     }
   }
 
-  const ranked = rankPlaces(collected, tokens, near);
-
-  // 名前の合うものが 1 件でもあるなら、合わないものは雑音なので落とす
-  const relevant = ranked.filter((place) => isRelevant(place.name, tokens));
-  const places = (relevant.length > 0 ? relevant : ranked).slice(0, limit);
-
-  return {
-    places,
-    triedQueries,
-    relaxed: triedQueries.length > 1 || usedNameSearch,
-  };
+  return shape(triedQueries.length > 1 || usedNameSearch);
 }

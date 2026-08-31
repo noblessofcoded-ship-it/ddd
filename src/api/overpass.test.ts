@@ -146,3 +146,43 @@ describe('dedupeParking', () => {
     expect(dedupeParking([base, far])).toHaveLength(2);
   });
 });
+
+describe('parseParkingElement — 料金タグの拾い漏れ対策', () => {
+  const el = (tags: Record<string, string>) =>
+    parseParkingElement(element({ tags: { amenity: 'parking', ...tags } }), destination);
+
+  it('fee:conditional からも有料と判定する', () => {
+    expect(el({ 'fee:conditional': 'yes @ (09:00-22:00)' })?.fee).toBe('paid');
+  });
+
+  it('charge:conditional の金額を読む', () => {
+    const lot = el({ 'charge:conditional': '300円/30分 @ (08:00-20:00)' });
+    expect(lot?.parsedFee.rate).toEqual({ unitJpy: 300, unitMinutes: 30 });
+  });
+
+  it('旧来の parking:condition:N:charge を読む', () => {
+    const lot = el({ 'parking:condition:1:charge': '200円/20分', 'parking:condition:2:charge': '最大900円' });
+    expect(lot?.parsedFee.rate).toEqual({ unitJpy: 200, unitMinutes: 20 });
+    expect(lot?.parsedFee.maxJpy).toBe(900);
+  });
+
+  it('parking:fee も見る', () => {
+    expect(el({ 'parking:fee': '400円/60分' })?.parsedFee.rate).toEqual({ unitJpy: 400, unitMinutes: 60 });
+  });
+
+  it('金額を含まない yes/no だけの条件タグは料金文として使わない', () => {
+    const lot = el({ fee: 'yes', 'fee:conditional': 'no @ customers' });
+    expect(lot?.fee).toBe('paid');
+    expect(lot?.feeNote).toBeNull();
+  });
+
+  it('parking:condition:1:maxstay も読む', () => {
+    expect(el({ 'parking:condition:1:maxstay': '3 h' })?.maxStayMinutes).toBe(180);
+  });
+
+  it('複数のタグに散っていても繋げて解釈する', () => {
+    const lot = el({ charge: '300円/30分', 'fee:conditions': '最大1,500円' });
+    expect(lot?.parsedFee.rate).toEqual({ unitJpy: 300, unitMinutes: 30 });
+    expect(lot?.parsedFee.maxJpy).toBe(1500);
+  });
+});

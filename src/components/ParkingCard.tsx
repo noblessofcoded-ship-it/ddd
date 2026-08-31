@@ -18,7 +18,7 @@ function feeLabel(lot: RankedParking): string {
   if (lot.estimatedFeeJpy !== null) {
     return lot.feeCapped ? `${formatJpy(lot.estimatedFeeJpy)}（最大）` : formatJpy(lot.estimatedFeeJpy);
   }
-  return lot.fee === 'paid' ? '有料（料金不明）' : '料金不明';
+  return lot.fee === 'paid' ? '有料・料金は未登録' : '料金は未登録';
 }
 
 export function ParkingCard({ lot, rank, selected, stayMinutes, onSelect }: Props) {
@@ -41,7 +41,17 @@ export function ParkingCard({ lot, rank, selected, stayMinutes, onSelect }: Prop
         </div>
 
         <div className="card__fee">
-          <strong className={lot.fee === 'free' ? 'fee fee--free' : 'fee'}>{feeLabel(lot)}</strong>
+          <strong
+            className={[
+              'fee',
+              lot.fee === 'free' ? 'fee--free' : '',
+              lot.estimatedFeeJpy === null && lot.fee !== 'free' ? 'fee--unknown' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            {feeLabel(lot)}
+          </strong>
           {showsEstimate && <span className="fee__note">{formatDuration(stayMinutes)}の目安</span>}
         </div>
 
@@ -74,8 +84,9 @@ export function ParkingCard({ lot, rank, selected, stayMinutes, onSelect }: Prop
         href={buildPlaceUrl(lot, lot.name)}
         target="_blank"
         rel="noreferrer noopener"
+        title="Google マップでこの駐車場を開く"
       >
-        詳細
+        {lot.estimatedFeeJpy === null && lot.fee !== 'free' ? '料金を\n確認' : '詳細'}
       </a>
     </li>
   );
