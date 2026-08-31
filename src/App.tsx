@@ -341,6 +341,7 @@ export default function App() {
                     onSaveFee={(charge) => setFeeNotes((notes) => saveFeeNote(notes, lot.id, charge))}
                     areaHint={destination.address}
                     destination={destination}
+                    vehicle={filters.vehicle}
                   />
                 ))}
               </ul>

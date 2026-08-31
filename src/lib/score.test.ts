@@ -365,8 +365,14 @@ describe('easeNotes — 停めやすさの根拠', () => {
   });
 
   it('低い車高制限には機械式の可能性を添える', () => {
-    expect(easeNotes(lot({ maxHeightM: 1.55 }))).toContain('車高1.55mまで（機械式の可能性）');
-    expect(easeNotes(lot({ maxHeightM: 2.1 }))).toContain('車高2.1mまで');
+    expect(easeNotes(lot({ maxHeightM: 1.55 }))).toContain('機械式の可能性');
+    expect(easeNotes(lot({ maxHeightM: 2.1 }))).not.toContain('機械式の可能性');
+  });
+
+  it('寸法の具体値は繰り返さない（サイズ制限欄に出すため）', () => {
+    const notes = easeNotes(lot({ maxHeightM: 1.55, maxWidthM: 1.85, maxLengthM: 5 }));
+    expect(notes.join('')).not.toContain('1.85');
+    expect(notes.join('')).not.toContain('車幅');
   });
 
   it('未舗装だけ路面を出す（舗装は当たり前なので出さない）', () => {

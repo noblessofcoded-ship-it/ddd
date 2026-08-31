@@ -131,17 +131,14 @@ const KIND_LABEL: Record<ParkingKind, string> = {
   unknown: '構造は未登録',
 };
 
-/** 停めやすさの根拠。数字を鵜呑みにさせないために出す */
+/**
+ * 停めやすさの根拠。数字を鵜呑みにさせないために出す。
+ * 車高・車幅・車長の具体値はサイズ制限欄に別途出すので、ここでは繰り返さない。
+ */
 export function easeNotes(lot: ParkingLot): string[] {
   const notes: string[] = [KIND_LABEL[lot.kind]];
 
-  if (lot.maxHeightM !== null) {
-    notes.push(
-      lot.maxHeightM < 1.6 ? `車高${lot.maxHeightM}mまで（機械式の可能性）` : `車高${lot.maxHeightM}mまで`,
-    );
-  }
-  if (lot.maxWidthM !== null) notes.push(`車幅${lot.maxWidthM}mまで`);
-  if (lot.maxLengthM !== null) notes.push(`車長${lot.maxLengthM}mまで`);
+  if (lot.maxHeightM !== null && lot.maxHeightM < 1.6) notes.push('機械式の可能性');
   if (lot.surface !== null && !PAVED_SURFACES.has(lot.surface)) notes.push('未舗装');
 
   return notes;

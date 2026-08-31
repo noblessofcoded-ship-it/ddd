@@ -29,3 +29,27 @@ export function exceedsLimits(lot: ParkingLot, vehicle: VehicleSize): boolean {
     (lot.maxLengthM !== null && lot.maxLengthM < vehicle.lengthM)
   );
 }
+
+/** その制限が、乗る車に対してどうか */
+export type LimitStatus =
+  /** OSM に登録が無い。制限が無いとは限らない */
+  | 'unknown'
+  /** 余裕がある */
+  | 'ok'
+  /** 入るがぎりぎり */
+  | 'tight';
+
+/** ぎりぎりとみなす余裕（m）。ミラーや開扉を考えるとこの程度は見ておきたい */
+const TIGHT_MARGIN_M = 0.05;
+
+/**
+ * 制限値と車の寸法を突き合わせる。
+ *
+ * 入れない駐車場は候補から外しているので、ここで扱うのは
+ * 「余裕があるか、ぎりぎりか」だけになる。
+ */
+export function limitStatus(limitM: number | null, vehicleM: number | null): LimitStatus {
+  if (limitM === null) return 'unknown';
+  if (vehicleM === null) return 'ok';
+  return limitM - vehicleM <= TIGHT_MARGIN_M ? 'tight' : 'ok';
+}

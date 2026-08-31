@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { VEHICLE_PRESETS, exceedsLimits, findVehicle } from './vehicle';
+import { VEHICLE_PRESETS, exceedsLimits, findVehicle, limitStatus } from './vehicle';
 import { EMPTY_FEE } from './fee';
 import type { ParkingLot } from '../types';
 
@@ -83,5 +83,30 @@ describe('exceedsLimits', () => {
   it('軽自動車でも 1.55m 制限には入らない', () => {
     // 背の高い軽が増えており、車種区分と高さは一致しない
     expect(exceedsLimits(lot({ maxHeightM: 1.55 }), kei)).toBe(true);
+  });
+});
+
+describe('limitStatus', () => {
+  it('登録が無ければ unknown', () => {
+    // 「制限が無い」とは限らないので、余裕ありとは扱わない
+    expect(limitStatus(null, 1.85)).toBe('unknown');
+    expect(limitStatus(null, null)).toBe('unknown');
+  });
+
+  it('車を指定していなければ、制限があっても ok', () => {
+    expect(limitStatus(1.85, null)).toBe('ok');
+  });
+
+  it('余裕があれば ok', () => {
+    expect(limitStatus(2.5, 1.85)).toBe('ok');
+  });
+
+  it('差が小さければ tight', () => {
+    expect(limitStatus(1.85, 1.85)).toBe('tight');
+    expect(limitStatus(1.88, 1.85)).toBe('tight');
+  });
+
+  it('5cm より広ければ ok', () => {
+    expect(limitStatus(1.95, 1.85)).toBe('ok');
   });
 });
