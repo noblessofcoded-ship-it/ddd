@@ -17,6 +17,53 @@ const FEE_CEILING_JPY = 2000;
 /** 屋根があるとみなす構造 */
 const COVERED_KINDS = new Set(['multi-storey', 'underground']);
 
+/** 時間貸し駐車場として素直に案内できる構造 */
+const LOT_KINDS = new Set(['surface', 'multi-storey', 'underground', 'rooftop']);
+
+/**
+ * 情報が薄い駐車場に掛ける係数の下限。
+ * 名前も台数も料金も無い点は、実体が駐車場かどうかも怪しいので
+ * 総合点を 55% まで落とす。除外はしない（本当に駐車場のこともあるため）。
+ */
+const MIN_CONFIDENCE_FACTOR = 0.55;
+
+/**
+ * 登録情報がどれだけ揃っているかを 0〜1 で返す。
+ *
+ * OSM には amenity=parking とだけ書かれた点が大量にあり、住宅の車庫や
+ * 建物の付属駐車場が混ざっている。これらは「近い」というだけで上位に来るが、
+ * 実際には停められないことが多い。距離だけで並べないための重みにする。
+ */
+export function dataConfidence(lot: ParkingLot): number {
+  const signals = [
+    lot.named,
+    lot.capacity !== null,
+    lot.fee !== 'unknown',
+    LOT_KINDS.has(lot.kind),
+    lot.operator !== null || lot.openingHours !== null,
+  ];
+  return signals.filter(Boolean).length / signals.length;
+}
+
+/** カードに出す注意書き。鵜呑みにさせないためのもの */
+function buildCautions(lot: ParkingLot, confidence: number): string[] {
+  const cautions: string[] = [];
+
+  if (lot.access === 'customers') {
+    cautions.push('施設利用者専用の可能性があります');
+  }
+  if (lot.kind === 'street-side') {
+    cautions.push('路上の駐車枠です');
+  }
+  if (confidence <= 0.2) {
+    cautions.push('登録情報がほとんどなく、駐車場でない可能性があります');
+  } else if (!lot.named && lot.capacity === null) {
+    cautions.push('名称・台数が未登録です');
+  }
+
+  return cautions;
+}
+
 /** 「近いほど良い」を 0-1 に落とす。徒歩許容距離の 2 倍で 0 になる */
 function proximityScore(distanceM: number, maxWalkM: number): number {
   const ceiling = Math.max(maxWalkM, 100) * 2;
@@ -94,6 +141,7 @@ export function matchesFilters(
   if (filters.coveredOnly && !COVERED_KINDS.has(lot.kind)) return false;
   // 営業状態が判定できないものは落とさない（読めない書式が多いため）
   if (filters.openNowOnly && openState === 'closed') return false;
+  if (filters.reliableOnly && dataConfidence(lot) < 0.4) return false;
   if (
     filters.vehicleHeightM !== null &&
     lot.maxHeightM !== null &&
@@ -104,7 +152,10 @@ export function matchesFilters(
   return true;
 }
 
-/** 1 件のおすすめ度を 0-100 で返す */
+/**
+ * 1 件のおすすめ度を 0-100 で返す。
+ * 各軸の重みづけを出したうえで、登録情報の薄さと利用制限で割り引く。
+ */
 export function scoreParking(
   lot: ParkingLot,
   filters: ParkingFilters,
@@ -116,7 +167,15 @@ export function scoreParking(
     capacityScore(lot.capacity) * WEIGHTS.capacity +
     comfortScore(lot) * WEIGHTS.comfort;
 
-  return Math.round(weighted);
+  const confidence = dataConfidence(lot);
+  const factor = MIN_CONFIDENCE_FACTOR + (1 - MIN_CONFIDENCE_FACTOR) * confidence;
+
+  // 別の施設の利用者専用は、行き先が違えば停められない
+  const accessFactor = lot.access === 'customers' ? 0.75 : 1;
+  // 路上の駐車枠は空きが読めず、そもそも停められないことも多い
+  const kindFactor = lot.kind === 'street-side' ? 0.8 : 1;
+
+  return Math.round(weighted * factor * accessFactor * kindFactor);
 }
 
 /**
@@ -136,10 +195,13 @@ export function rankParking(
     .filter(({ lot, openState }) => matchesFilters(lot, filters, openState))
     .map(({ lot, openState }) => {
       const estimate = lot.fee === 'free' ? null : estimateFee(lot.parsedFee, filters.stayMinutes);
+      const confidence = dataConfidence(lot);
       return {
         ...lot,
         score: scoreParking(lot, filters, estimate),
         reasons: buildReasons(lot, estimate, filters.stayMinutes),
+        confidence,
+        cautions: buildCautions(lot, confidence),
         estimatedFeeJpy: lot.fee === 'free' ? 0 : (estimate?.jpy ?? null),
         feeCapped: estimate?.capped ?? false,
         openState,

@@ -16,6 +16,15 @@ export type Place = LatLng & {
   address: string;
 };
 
+/** 誰が停められるか。OSM の access タグから判定する */
+export type AccessKind =
+  /** 誰でも停められる */
+  | 'public'
+  /** その施設の利用者だけ。別の店に行くのには使えない */
+  | 'customers'
+  /** 記載なし */
+  | 'unknown';
+
 /** 料金の区分。OSM の fee タグから判定する */
 export type FeeKind = 'free' | 'paid' | 'unknown';
 
@@ -32,6 +41,12 @@ export type ParkingKind =
 export type ParkingLot = LatLng & {
   id: string;
   name: string;
+  /** OSM に名前が登録されていたか。未登録なら name は既定の文言 */
+  named: boolean;
+  /** 利用制限 */
+  access: AccessKind;
+  /** 運営者・ブランド名 */
+  operator: string | null;
   fee: FeeKind;
   /** 料金の説明文（`fee:conditions` や `charge` タグ） */
   feeNote: string | null;
@@ -66,6 +81,14 @@ export type RankedParking = ParkingLot & {
   openState: OpenState;
   /** 滞在時間が最大駐車時間を超えているか */
   exceedsMaxStay: boolean;
+  /**
+   * 登録情報の充実度（0〜1）。
+   * OSM には名前も台数も料金も無い曖昧な点が多く、そういうものが
+   * 「近い」というだけで上位に来ないよう、総合点に掛けて効かせる。
+   */
+  confidence: number;
+  /** 注意して扱うべき理由。「情報が少ない」など */
+  cautions: string[];
 };
 
 /** レコメンドの絞り込み条件 */
@@ -82,6 +105,8 @@ export type ParkingFilters = {
   stayMinutes: number;
   /** 今すぐ停められる（営業中の）駐車場だけに絞る */
   openNowOnly: boolean;
+  /** 登録情報が薄い駐車場を候補から外す */
+  reliableOnly: boolean;
 };
 
 export const DEFAULT_FILTERS: ParkingFilters = {
@@ -91,4 +116,5 @@ export const DEFAULT_FILTERS: ParkingFilters = {
   vehicleHeightM: null,
   stayMinutes: 120,
   openNowOnly: false,
+  reliableOnly: false,
 };

@@ -1,6 +1,6 @@
 import { parseCharge, parseMaxStay } from '../lib/fee';
 import { distanceMeters, walkMinutes } from '../lib/geo';
-import type { FeeKind, LatLng, ParkingKind, ParkingLot, Place } from '../types';
+import type { AccessKind, FeeKind, LatLng, ParkingKind, ParkingLot, Place } from '../types';
 
 /** 本家が混んでいるときのために複数のミラーを順に試す */
 const ENDPOINTS = [
@@ -18,7 +18,34 @@ export type OverpassElement = {
 };
 
 /** 一般利用できない駐車場の access タグ */
-const CLOSED_ACCESS = new Set(['private', 'no', 'permit']);
+const CLOSED_ACCESS = new Set([
+  'private',
+  'no',
+  'permit',
+  'residents',
+  'employees',
+  'delivery',
+  'agricultural',
+  'forestry',
+  'military',
+]);
+
+/**
+ * 一般の駐車場として案内してはいけない parking タグ。
+ * 住宅のガレージや車庫まで amenity=parking で登録されており、
+ * これらが「近い」というだけで上位に来ると案内として成立しない。
+ */
+const NON_PUBLIC_PARKING = new Set([
+  'private',
+  'garage_boxes',
+  'garages',
+  'carports',
+  'carport',
+  'shed',
+  'sheds',
+  'driveway',
+  'building',
+]);
 
 const KIND_BY_TAG: Record<string, ParkingKind> = {
   surface: 'surface',
@@ -95,6 +122,13 @@ function parseName(tags: Record<string, string>, kind: ParkingKind): string {
   return kind === 'street-side' ? '路上パーキング' : '駐車場（名称なし）';
 }
 
+function parseAccess(tags: Record<string, string>): AccessKind {
+  const access = tags.access?.toLowerCase();
+  if (access === 'customers') return 'customers';
+  if (access === 'yes' || access === 'public' || access === 'permissive') return 'public';
+  return 'unknown';
+}
+
 /**
  * Overpass の 1 要素を ParkingLot に変換する。
  * 座標が無いもの・一般利用できないものは null を返して呼び出し側で落とす。
@@ -109,7 +143,9 @@ export function parseParkingElement(
 
   const tags = element.tags ?? {};
   if (CLOSED_ACCESS.has(tags.access?.toLowerCase() ?? '')) return null;
-  if (tags.parking === 'private') return null;
+  if (NON_PUBLIC_PARKING.has(tags.parking?.toLowerCase() ?? '')) return null;
+  // 駐輪場・バイク置き場が amenity=parking で登録されていることがある
+  if (tags.parking === 'bicycle' || tags.bicycle_parking) return null;
 
   const kind = KIND_BY_TAG[tags.parking ?? ''] ?? 'unknown';
   const distance = distanceMeters(destination, { lat, lng });
@@ -118,6 +154,9 @@ export function parseParkingElement(
   return {
     id: `${element.type}/${element.id}`,
     name: parseName(tags, kind),
+    named: Boolean(tags['name:ja'] || tags.name || tags.operator || tags.brand),
+    access: parseAccess(tags),
+    operator: tags.operator ?? tags.brand ?? null,
     lat,
     lng,
     fee: parseFee(tags, feeNote),
@@ -136,6 +175,7 @@ export function parseParkingElement(
 /** 情報量の多さ。重複時にどちらを残すか決めるのに使う */
 function detailLevel(lot: ParkingLot): number {
   return (
+    (lot.named ? 1 : 0) +
     (lot.capacity !== null ? 1 : 0) +
     (lot.openingHours !== null ? 1 : 0) +
     (lot.fee !== 'unknown' ? 1 : 0) +

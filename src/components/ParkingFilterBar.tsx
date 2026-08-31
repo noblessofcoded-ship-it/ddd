@@ -57,6 +57,15 @@ export function ParkingFilterBar({ filters, onChange }: Props) {
         </button>
         <button
           type="button"
+          className={`chip ${filters.reliableOnly ? 'chip--on' : ''}`}
+          aria-pressed={filters.reliableOnly}
+          onClick={() => patch({ reliableOnly: !filters.reliableOnly })}
+          title="名称・台数・料金などが登録されている駐車場だけを表示します"
+        >
+          情報が確かなものだけ
+        </button>
+        <button
+          type="button"
           className={`chip ${filters.freeOnly ? 'chip--on' : ''}`}
           aria-pressed={filters.freeOnly}
           onClick={() => patch({ freeOnly: !filters.freeOnly })}

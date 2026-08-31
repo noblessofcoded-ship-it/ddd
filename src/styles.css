@@ -366,6 +366,12 @@ body {
   border-radius: 6px;
   padding: 3px 8px;
 }
+/* 断定できない注意書き。警告より一段弱く見せる */
+.warning--soft {
+  color: #64748b;
+  background: #f8fafc;
+  border-color: var(--border);
+}
 
 /* ---------- parking cards ---------- */
 .cards {
