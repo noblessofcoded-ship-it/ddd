@@ -5,6 +5,23 @@
 
 駐車場をレコメンドするかどうかはトグルで選べます。OFF にすれば目的地まで直行のルートになります。
 
+## 公開（GitHub Pages）
+
+`.github/workflows/deploy.yml` が `main` へのプッシュで自動的にビルドしてデプロイします。
+型チェックとテストが通らなければデプロイされません。
+
+初回だけ、GitHub 側で 2 つ設定が必要です。
+
+1. **リポジトリを public にする**
+   Settings → 一番下の Danger Zone → *Change repository visibility* → Public
+   （private のままだと GitHub Pages は有料プランが必要です）
+2. **Pages を有効にする**
+   Settings → Pages → *Source* を **GitHub Actions** に変更
+
+公開先は `https://<ユーザー名>.github.io/<リポジトリ名>/` です。
+サブパス配下で配信されるため、ビルド時に `BASE_PATH` 環境変数でベースパスを渡しています
+（ワークフローがリポジトリ名から自動で組み立てます）。
+
 ## 使い方
 
 ```bash
