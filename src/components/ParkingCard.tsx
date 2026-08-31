@@ -55,7 +55,7 @@ export function ParkingCard({ lot, rank, selected, stayMinutes, onSelect }: Prop
           {showsEstimate && <span className="fee__note">{formatDuration(stayMinutes)}の目安</span>}
         </div>
 
-        {(lot.openState === 'closed' || lot.exceedsMaxStay) && (
+        {(lot.openState === 'closed' || lot.exceedsMaxStay || lot.cautions.length > 0) && (
           <ul className="warnings">
             {lot.openState === 'closed' && (
               <li className="warning">現在は営業時間外（{lot.openingHours}）</li>
@@ -65,6 +65,11 @@ export function ParkingCard({ lot, rank, selected, stayMinutes, onSelect }: Prop
                 最大{formatDuration(lot.maxStayMinutes)}まで（希望より短い）
               </li>
             )}
+            {lot.cautions.map((caution) => (
+              <li key={caution} className="warning warning--soft">
+                {caution}
+              </li>
+            ))}
           </ul>
         )}
 

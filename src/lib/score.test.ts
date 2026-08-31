@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchesFilters, rankParking, scoreParking } from './score';
+import { dataConfidence, matchesFilters, rankParking, scoreParking } from './score';
 import { EMPTY_FEE, parseCharge } from './fee';
 import { DEFAULT_FILTERS, type ParkingLot } from '../types';
 
@@ -12,6 +12,9 @@ function lot(overrides: Partial<ParkingLot> = {}): ParkingLot {
     name: 'テスト駐車場',
     lat: 35.68,
     lng: 139.76,
+    named: true,
+    access: 'public',
+    operator: null,
     fee: 'unknown',
     feeNote: null,
     parsedFee: EMPTY_FEE,
@@ -217,5 +220,89 @@ describe('rankParking — 並び順と絞り込み', () => {
       lot({ id: `node/${index}`, distanceM: 100 + index }),
     );
     expect(rankParking(lots, DEFAULT_FILTERS, { now: NOW, limit: 5 })).toHaveLength(5);
+  });
+});
+
+describe('dataConfidence', () => {
+  it('情報が揃っているほど高い', () => {
+    const rich = lot({ named: true, capacity: 50, fee: 'paid', kind: 'multi-storey', operator: 'タイムズ' });
+    const bare = lot({ named: false, capacity: null, fee: 'unknown', kind: 'unknown', operator: null });
+    expect(dataConfidence(rich)).toBe(1);
+    expect(dataConfidence(bare)).toBe(0);
+  });
+
+  it('名前だけでも少しは加点される', () => {
+    const named = lot({ named: true, capacity: null, fee: 'unknown', kind: 'unknown', operator: null });
+    expect(dataConfidence(named)).toBeGreaterThan(0);
+  });
+});
+
+describe('scoreParking — 情報の確かさによる割り引き', () => {
+  /** 名称・台数・料金・種別すべて未登録の、実体が怪しい点 */
+  const vague = (overrides = {}) =>
+    lot({ named: false, capacity: null, fee: 'unknown', kind: 'unknown', operator: null, ...overrides });
+
+  it('すぐ近くでも、情報が無い点は情報の揃った少し遠い駐車場に勝てない', () => {
+    // 実際の画面で「駐車場（名称なし）」が 1 位に来ていた状況
+    const nearVague = vague({ distanceM: 40, walkMinutes: 1 });
+    const farKnown = lot({
+      distanceM: 260, walkMinutes: 4, named: true, capacity: 80,
+      fee: 'paid', kind: 'multi-storey', operator: 'タイムズ', openingHours: '24/7',
+    });
+    expect(scoreParking(farKnown, DEFAULT_FILTERS, { jpy: 800, capped: false }))
+      .toBeGreaterThan(scoreParking(nearVague, DEFAULT_FILTERS, null));
+  });
+
+  it('同じ条件なら情報のある方が高い', () => {
+    expect(scoreParking(lot({ named: true, capacity: 40, fee: 'free', kind: 'surface' }), DEFAULT_FILTERS, null))
+      .toBeGreaterThan(scoreParking(vague(), DEFAULT_FILTERS, null));
+  });
+
+  it('施設利用者専用は割り引く', () => {
+    const open = lot({ access: 'public' });
+    const customers = lot({ access: 'customers' });
+    expect(scoreParking(customers, DEFAULT_FILTERS, null))
+      .toBeLessThan(scoreParking(open, DEFAULT_FILTERS, null));
+  });
+
+  it('路上の駐車枠は割り引く', () => {
+    expect(scoreParking(lot({ kind: 'street-side' }), DEFAULT_FILTERS, null))
+      .toBeLessThan(scoreParking(lot({ kind: 'surface' }), DEFAULT_FILTERS, null));
+  });
+});
+
+describe('rankParking — 注意書きと絞り込み', () => {
+  it('情報がほとんど無いものには注意書きを付ける', () => {
+    const [first] = rank([
+      lot({ named: false, capacity: null, fee: 'unknown', kind: 'unknown', operator: null, openingHours: null }),
+    ]);
+    expect(first.cautions).toContain('登録情報がほとんどなく、駐車場でない可能性があります');
+  });
+
+  it('施設利用者専用と路上には、それぞれの注意書きを付ける', () => {
+    const ranked = rank([
+      lot({ id: 'node/c', access: 'customers' }),
+      lot({ id: 'node/s', kind: 'street-side' }),
+    ]);
+    const byId = Object.fromEntries(ranked.map((r) => [r.id, r.cautions]));
+    expect(byId['node/c']).toContain('施設利用者専用の可能性があります');
+    expect(byId['node/s']).toContain('路上の駐車枠です');
+  });
+
+  it('情報が揃っていれば注意書きを付けない', () => {
+    const [first] = rank([lot({ named: true, capacity: 50, fee: 'free', kind: 'surface' })]);
+    expect(first.cautions).toEqual([]);
+  });
+
+  it('「情報が確かなものだけ」で薄いものを外す', () => {
+    const filters = { ...DEFAULT_FILTERS, reliableOnly: true };
+    const ranked = rank(
+      [
+        lot({ id: 'node/vague', named: false, capacity: null, fee: 'unknown', kind: 'unknown', operator: null, openingHours: null }),
+        lot({ id: 'node/known', named: true, capacity: 30, fee: 'paid', kind: 'surface' }),
+      ],
+      filters,
+    );
+    expect(ranked.map((r) => r.id)).toEqual(['node/known']);
   });
 });

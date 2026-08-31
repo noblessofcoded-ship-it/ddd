@@ -118,6 +118,9 @@ describe('dedupeParking', () => {
     name: '中央駐車場',
     lat: 35.66,
     lng: 139.701,
+    named: true,
+    access: 'public',
+    operator: null,
     fee: 'unknown',
     feeNote: null,
     parsedFee: EMPTY_FEE,
@@ -184,5 +187,48 @@ describe('parseParkingElement — 料金タグの拾い漏れ対策', () => {
     const lot = el({ charge: '300円/30分', 'fee:conditions': '最大1,500円' });
     expect(lot?.parsedFee.rate).toEqual({ unitJpy: 300, unitMinutes: 30 });
     expect(lot?.parsedFee.maxJpy).toBe(1500);
+  });
+});
+
+describe('parseParkingElement — 一般利用できないものの除外', () => {
+  const el = (tags: Record<string, string>) =>
+    parseParkingElement(element({ tags: { amenity: 'parking', ...tags } }), destination);
+
+  it('住宅の車庫・ガレージは候補にしない', () => {
+    expect(el({ parking: 'garage_boxes' })).toBeNull();
+    expect(el({ parking: 'carports' })).toBeNull();
+    expect(el({ parking: 'shed' })).toBeNull();
+    expect(el({ parking: 'driveway' })).toBeNull();
+  });
+
+  it('居住者・従業員専用は候補にしない', () => {
+    expect(el({ access: 'residents' })).toBeNull();
+    expect(el({ access: 'employees' })).toBeNull();
+    expect(el({ access: 'delivery' })).toBeNull();
+  });
+
+  it('駐輪場が amenity=parking で登録されていても除く', () => {
+    expect(el({ parking: 'bicycle' })).toBeNull();
+  });
+
+  it('通常の駐車場は残す', () => {
+    expect(el({ parking: 'surface' })).not.toBeNull();
+    expect(el({ access: 'yes' })).not.toBeNull();
+    expect(el({ access: 'permissive' })).not.toBeNull();
+  });
+
+  it('利用者専用は残したうえで印を付ける', () => {
+    expect(el({ access: 'customers' })?.access).toBe('customers');
+  });
+
+  it('名前の有無を記録する', () => {
+    expect(el({ name: 'タイムズ心斎橋' })?.named).toBe(true);
+    expect(el({})?.named).toBe(false);
+    expect(el({ operator: 'タイムズ24' })?.named).toBe(true);
+  });
+
+  it('運営者を拾う', () => {
+    expect(el({ operator: 'タイムズ24' })?.operator).toBe('タイムズ24');
+    expect(el({ brand: '三井のリパーク' })?.operator).toBe('三井のリパーク');
   });
 });
