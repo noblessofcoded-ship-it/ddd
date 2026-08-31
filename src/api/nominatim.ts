@@ -1,4 +1,4 @@
-import type { Place } from '../types';
+import type { LatLng, Place } from '../types';
 
 const ENDPOINT = 'https://nominatim.openstreetmap.org/search';
 
@@ -24,7 +24,7 @@ function splitDisplayName(result: NominatimResult): { name: string; address: str
  */
 export async function searchPlaces(
   query: string,
-  options: { signal?: AbortSignal; limit?: number } = {},
+  options: { signal?: AbortSignal; limit?: number; near?: LatLng | null } = {},
 ): Promise<Place[]> {
   const trimmed = query.trim();
   if (trimmed.length === 0) return [];
@@ -33,9 +33,17 @@ export async function searchPlaces(
     q: trimmed,
     format: 'jsonv2',
     addressdetails: '0',
-    limit: String(options.limit ?? 8),
+    limit: String(options.limit ?? 10),
     'accept-language': 'ja',
   });
+
+  // 現在地が分かっていれば周辺を優先する。bounded=0 なので範囲外も落とさない
+  if (options.near) {
+    const span = 0.5; // 緯度経度で約 55km
+    const { lat, lng } = options.near;
+    params.set('viewbox', [lng - span, lat + span, lng + span, lat - span].join(','));
+    params.set('bounded', '0');
+  }
 
   const response = await fetch(`${ENDPOINT}?${params.toString()}`, {
     signal: options.signal,

@@ -1,14 +1,17 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { boundsOf } from '../lib/geo';
-import type { Place, RankedParking } from '../types';
+import type { LatLng, Place, RankedParking } from '../types';
 
 type Props = {
-  destination: Place;
+  /** 目的地。地図から指定する途中では未確定なので null を許す */
+  destination: Place | null;
   origin: Place | null;
   lots: RankedParking[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** 指定すると地図のクリックで地点を選べるようになる */
+  onPick?: (point: LatLng) => void;
 };
 
 const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -23,13 +26,15 @@ function pinIcon(variant: 'destination' | 'origin' | 'parking' | 'parking-select
   });
 }
 
-export function MapView({ destination, origin, lots, selectedId, onSelect }: Props) {
+export function MapView({ destination, origin, lots, selectedId, onSelect, onPick }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
   // onSelect の再生成でマーカーを貼り直さずに済むよう ref 経由で呼ぶ
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const onPickRef = useRef(onPick);
+  onPickRef.current = onPick;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -37,6 +42,10 @@ export function MapView({ destination, origin, lots, selectedId, onSelect }: Pro
     const map = L.map(containerRef.current, { zoomControl: false, attributionControl: true });
     L.tileLayer(TILE_URL, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    map.on('click', (event: L.LeafletMouseEvent) => {
+      onPickRef.current?.({ lat: event.latlng.lat, lng: event.latlng.lng });
+    });
 
     mapRef.current = map;
     layerRef.current = L.layerGroup().addTo(map);
@@ -55,12 +64,19 @@ export function MapView({ destination, origin, lots, selectedId, onSelect }: Pro
 
     layer.clearLayers();
 
-    L.marker(destination, { icon: pinIcon('destination', '目') , zIndexOffset: 500 })
-      .bindTooltip(destination.name, { direction: 'top' })
-      .addTo(layer);
+    // 地点指定中はマーカーがクリックを飲み込まないようにする。
+    // 地点が 1 つだけだとそれが地図の中心に来るため、一番押したい場所が
+    // マーカーに塞がれて地図のクリックが発火しなくなる。
+    const interactive = !onPick;
+
+    if (destination) {
+      L.marker(destination, { icon: pinIcon('destination', '目'), zIndexOffset: 500, interactive })
+        .bindTooltip(destination.name, { direction: 'top' })
+        .addTo(layer);
+    }
 
     if (origin) {
-      L.marker(origin, { icon: pinIcon('origin', '出'), zIndexOffset: 400 })
+      L.marker(origin, { icon: pinIcon('origin', '出'), zIndexOffset: 400, interactive })
         .bindTooltip(origin.name, { direction: 'top' })
         .addTo(layer);
     }
@@ -70,6 +86,7 @@ export function MapView({ destination, origin, lots, selectedId, onSelect }: Pro
       const marker = L.marker(lot, {
         icon: pinIcon(isSelected ? 'parking-selected' : 'parking', String(index + 1)),
         zIndexOffset: isSelected ? 300 : 0,
+        interactive,
       })
         .bindTooltip(`${lot.name}（徒歩${lot.walkMinutes}分）`, { direction: 'top' })
         .addTo(layer);
@@ -77,19 +94,34 @@ export function MapView({ destination, origin, lots, selectedId, onSelect }: Pro
     });
 
     const selected = lots.find((lot) => lot.id === selectedId);
-    if (selected) {
+    if (selected && destination) {
       L.polyline([selected, destination], {
         color: '#2563eb',
         weight: 3,
         dashArray: '6 6',
+        interactive,
       }).addTo(layer);
     }
 
-    const bounds = boundsOf([destination, ...(origin ? [origin] : []), ...lots]);
+    const bounds = boundsOf([
+      ...(destination ? [destination] : []),
+      ...(origin ? [origin] : []),
+      ...lots,
+    ]);
     if (bounds) {
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 });
+    } else {
+      // 目的地も出発地も無い状態（地図から指定する場合）は日本全体を映す
+      map.setView([36.2048, 138.2529], 5);
     }
-  }, [destination, origin, lots, selectedId]);
+  }, [destination, origin, lots, selectedId, onPick]);
 
-  return <div className="map" ref={containerRef} role="application" aria-label="地図" />;
+  return (
+    <div
+      className={`map ${onPick ? 'map--picking' : ''}`}
+      ref={containerRef}
+      role="application"
+      aria-label="地図"
+    />
+  );
 }
