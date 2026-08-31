@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { formatDuration, formatJpy } from '../lib/fee';
 import { formatDistance } from '../lib/geo';
 import { buildPlaceUrl } from '../lib/googleMaps';
@@ -10,6 +11,8 @@ type Props = {
   /** 見積もりに使っている滞在時間(分) */
   stayMinutes: number;
   onSelect: () => void;
+  /** 自分で調べた料金を登録する。空文字なら取り消し */
+  onSaveFee: (charge: string) => void;
 };
 
 /** 料金欄の表示。概算が出せるなら金額を、無理なら区分を出す */
@@ -21,11 +24,20 @@ function feeLabel(lot: RankedParking): string {
   return lot.fee === 'paid' ? '有料・料金は未登録' : '料金は未登録';
 }
 
-export function ParkingCard({ lot, rank, selected, stayMinutes, onSelect }: Props) {
+export function ParkingCard({ lot, rank, selected, stayMinutes, onSelect, onSaveFee }: Props) {
   const showsEstimate = lot.fee !== 'free' && lot.estimatedFeeJpy !== null;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(lot.feeSource === 'user' ? (lot.feeNote ?? '') : '');
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    onSaveFee(draft);
+    setEditing(false);
+  };
 
   return (
     <li className={`card ${selected ? 'card--selected' : ''}`}>
+      <div className="card__row">
       <button type="button" className="card__main" onClick={onSelect} aria-pressed={selected}>
         <div className="card__head">
           <span className={`rank ${rank === 1 ? 'rank--top' : ''}`}>{rank}</span>
@@ -53,6 +65,7 @@ export function ParkingCard({ lot, rank, selected, stayMinutes, onSelect }: Prop
             {feeLabel(lot)}
           </strong>
           {showsEstimate && <span className="fee__note">{formatDuration(stayMinutes)}の目安</span>}
+          {lot.feeSource === 'user' && <span className="badge">自分で登録</span>}
         </div>
 
         {(lot.openState === 'closed' || lot.exceedsMaxStay || lot.cautions.length > 0) && (
@@ -93,6 +106,36 @@ export function ParkingCard({ lot, rank, selected, stayMinutes, onSelect }: Prop
       >
         {lot.estimatedFeeJpy === null && lot.fee !== 'free' ? '料金を\n確認' : '詳細'}
       </a>
+      </div>
+
+      {editing ? (
+        <form className="feeform" onSubmit={submit}>
+          <label className="feeform__label" htmlFor={`fee-${lot.id}`}>
+            見てきた料金を入力（例：300円/30分 最大1500円）
+          </label>
+          <div className="feeform__row">
+            <input
+              id={`fee-${lot.id}`}
+              className="input"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder="300円/30分 最大1500円"
+              autoComplete="off"
+              autoFocus
+            />
+            <button type="submit" className="btn btn--primary">
+              保存
+            </button>
+            <button type="button" className="btn btn--ghost" onClick={() => setEditing(false)}>
+              やめる
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button type="button" className="feeform__open" onClick={() => setEditing(true)}>
+          {lot.feeSource === 'user' ? '登録した料金を直す' : '調べた料金を登録する'}
+        </button>
+      )}
     </li>
   );
 }

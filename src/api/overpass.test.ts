@@ -123,6 +123,7 @@ describe('dedupeParking', () => {
     operator: null,
     fee: 'unknown',
     feeNote: null,
+    feeSource: 'osm',
     parsedFee: EMPTY_FEE,
     kind: 'unknown',
     capacity: null,

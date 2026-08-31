@@ -50,6 +50,8 @@ export type ParkingLot = LatLng & {
   fee: FeeKind;
   /** 料金の説明文（`fee:conditions` や `charge` タグ） */
   feeNote: string | null;
+  /** 料金の出どころ。'user' は利用者が自分で登録したもの */
+  feeSource: 'osm' | 'user';
   /** 料金文字列から読み取れた単価・最大料金 */
   parsedFee: ParsedFee;
   kind: ParkingKind;

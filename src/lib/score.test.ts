@@ -17,6 +17,7 @@ function lot(overrides: Partial<ParkingLot> = {}): ParkingLot {
     operator: null,
     fee: 'unknown',
     feeNote: null,
+    feeSource: 'osm',
     parsedFee: EMPTY_FEE,
     kind: 'surface',
     capacity: null,
