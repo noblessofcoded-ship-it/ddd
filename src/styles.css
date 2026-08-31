@@ -223,6 +223,12 @@ body {
 .tried--skipped {
   color: var(--muted);
 }
+.tried--failed {
+  color: var(--danger);
+}
+.tried .tried--failed::before {
+  content: '× ';
+}
 .tried .tried--skipped::before {
   content: '– ';
 }

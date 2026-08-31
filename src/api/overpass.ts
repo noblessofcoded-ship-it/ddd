@@ -328,17 +328,19 @@ export async function searchPlacesByName(
   const usable = terms.map((term) => term.trim()).filter((term) => term.length >= 2);
   if (usable.length === 0) return [];
 
-  const radius = options.radiusM ?? 50_000;
+  const radius = options.radiusM ?? 20_000;
   const limit = options.limit ?? 20;
   const around = `around:${radius},${near.lat},${near.lng}`;
   const pattern = usable.map(escapeForOverpassRegex).join('|');
 
-  // name だけを見ると、name:ja や alt_name にしか名前が無い地点を取りこぼす
+  // キーを正規表現で指定する書き方（[~"^(name|...)$"~"..."]）は名前の索引が
+  // 使えず、範囲内の全要素を走査することになる。市街地では確実に時間切れになるため、
+  // キーを 1 つずつ指定して索引を効かせる。nwr は node/way/relation をまとめて指す
   const data = `[out:json][timeout:25];
 (
-  node[~"^(name|name:ja|alt_name|official_name|branch)$"~"${pattern}"](${around});
-  way[~"^(name|name:ja|alt_name|official_name|branch)$"~"${pattern}"](${around});
-  relation[~"^(name|name:ja|alt_name|official_name|branch)$"~"${pattern}"](${around});
+  nwr["name"~"${pattern}"](${around});
+  nwr["name:ja"~"${pattern}"](${around});
+  nwr["alt_name"~"${pattern}"](${around});
 );
 out center tags ${limit};`;
 

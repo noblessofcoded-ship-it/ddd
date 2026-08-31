@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { dedupeParking, parseParkingElement, type OverpassElement } from './overpass';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { dedupeParking, parseParkingElement, searchPlacesByName, type OverpassElement } from './overpass';
 import { EMPTY_FEE } from '../lib/fee';
 import type { ParkingLot } from '../types';
 
@@ -265,5 +265,36 @@ describe('parseParkingElement — 名前と住所', () => {
 
   it('住所タグが無ければ null', () => {
     expect(el({})?.address).toBeNull();
+  });
+});
+
+describe('searchPlacesByName — 問い合わせの組み立て', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** 送られた Overpass クエリを覗く */
+  async function captureQuery(terms: string[]) {
+    let sent = '';
+    vi.stubGlobal('fetch', async (_url: unknown, init: RequestInit) => {
+      sent = decodeURIComponent(String(init.body)).replace(/\+/g, ' ');
+      return { ok: true, json: async () => ({ elements: [] }) } as Response;
+    });
+    await searchPlacesByName(terms, { lat: 34.68, lng: 135.5 });
+    return sent;
+  }
+
+  it('キーを 1 つずつ指定して名前の索引を使う', async () => {
+    // キーを正規表現で指定すると索引が効かず、市街地では時間切れになる
+    const query = await captureQuery(['神楽亭']);
+    expect(query).toContain('nwr["name"~"神楽亭"]');
+    expect(query).toContain('nwr["name:ja"~"神楽亭"]');
+    expect(query).not.toContain('[~"^(name');
+  });
+
+  it('範囲は 20km にとどめる', async () => {
+    expect(await captureQuery(['神楽亭'])).toContain('around:20000');
+  });
+
+  it('複数の語は選択和にする', async () => {
+    expect(await captureQuery(['台湾鍋', '民生炒飯'])).toContain('~"台湾鍋|民生炒飯"');
   });
 });
