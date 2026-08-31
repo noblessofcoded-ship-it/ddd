@@ -46,9 +46,14 @@ export type ParkingKind =
   | 'street-side'
   | 'unknown';
 
-/** OSM から取得した駐車場 1 件 */
+/** 駐車場の情報をどこから取ったか */
+export type ParkingSource = 'osm' | 'yahoo';
+
+/** 駐車場 1 件 */
 export type ParkingLot = LatLng & {
   id: string;
+  /** 情報の出どころ。実在の確からしさの評価が変わる */
+  source: ParkingSource;
   name: string;
   /**
    * 固有の名前が登録されていたか。

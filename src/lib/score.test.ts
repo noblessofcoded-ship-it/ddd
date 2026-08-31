@@ -21,6 +21,7 @@ function lot(overrides: Partial<ParkingLot> = {}): ParkingLot {
     name: 'テスト駐車場',
     lat: 35.68,
     lng: 139.76,
+    source: 'osm',
     named: true,
     address: null,
     access: 'public',
@@ -421,5 +422,32 @@ describe('easeLevel — 見出しの付け方', () => {
 
   it('情報が無ければ「ふつう」', () => {
     expect(easeLevel(lot({ kind: 'unknown' }))).toBe('fair');
+  });
+});
+
+describe('dataConfidence — 出どころによる扱い', () => {
+  it('Yahoo! の駐車場は、料金や台数が無くても実在を疑わない', () => {
+    // 電話帳をもとにした店舗情報なので、載っている時点で実在は確か
+    const yahoo = lot({ source: 'yahoo', named: true, capacity: null, fee: 'unknown', kind: 'unknown', operator: null, openingHours: null });
+    const osm = lot({ source: 'osm', named: true, capacity: null, fee: 'unknown', kind: 'unknown', operator: null, openingHours: null });
+    expect(dataConfidence(yahoo)).toBeGreaterThan(dataConfidence(osm));
+    expect(dataConfidence(yahoo)).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it('情報が揃っていれば出どころで差を付けない', () => {
+    const rich = { named: true, capacity: 50, fee: 'paid' as const, kind: 'surface' as const, operator: 'タイムズ' };
+    expect(dataConfidence(lot({ source: 'yahoo', ...rich }))).toBe(dataConfidence(lot({ source: 'osm', ...rich })));
+  });
+});
+
+describe('rankParking — Yahoo! の駐車場の注意書き', () => {
+  it('料金や制限が無いことを伝える', () => {
+    const [first] = rank([lot({ source: 'yahoo', named: true, capacity: null, fee: 'unknown', kind: 'unknown', operator: null, openingHours: null })]);
+    expect(first.cautions).toContain('料金や車両制限は登録がありません');
+  });
+
+  it('OSM の駐車場には出さない', () => {
+    const [first] = rank([lot({ source: 'osm', named: true, capacity: 30, fee: 'free', kind: 'surface' })]);
+    expect(first.cautions).not.toContain('料金や車両制限は登録がありません');
   });
 });

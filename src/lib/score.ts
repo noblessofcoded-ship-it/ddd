@@ -165,6 +165,10 @@ const MIN_CONFIDENCE_FACTOR = 0.55;
  * 実際には停められないことが多い。距離だけで並べないための重みにする。
  */
 export function dataConfidence(lot: ParkingLot): number {
+  // Yahoo! は電話帳をもとにした店舗情報なので、載っている時点で実在は確か。
+  // 料金や台数が無いことを、実在への疑いとして扱わない
+  const floor = lot.source === 'yahoo' ? 0.6 : 0;
+
   const signals = [
     lot.named,
     lot.capacity !== null,
@@ -172,7 +176,7 @@ export function dataConfidence(lot: ParkingLot): number {
     LOT_KINDS.has(lot.kind),
     lot.operator !== null || lot.openingHours !== null,
   ];
-  return signals.filter(Boolean).length / signals.length;
+  return Math.max(floor, signals.filter(Boolean).length / signals.length);
 }
 
 /** カードに出す注意書き。鵜呑みにさせないためのもの */
@@ -187,6 +191,8 @@ function buildCautions(lot: ParkingLot, confidence: number): string[] {
   }
   if (confidence <= 0.2) {
     cautions.push('登録情報がほとんどなく、駐車場でない可能性があります');
+  } else if (lot.source === 'yahoo') {
+    cautions.push('料金や車両制限は登録がありません');
   } else if (!lot.named && lot.capacity === null) {
     cautions.push('名称・台数が未登録です');
   }
