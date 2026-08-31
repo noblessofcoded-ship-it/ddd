@@ -16,6 +16,15 @@ export type Place = LatLng & {
   address: string;
 };
 
+/** 乗る車の寸法（m） */
+export type VehicleSize = {
+  /** 表示用の名前。「ミニバン・SUV」など */
+  label: string;
+  widthM: number;
+  heightM: number;
+  lengthM: number;
+};
+
 /** 誰が停められるか。OSM の access タグから判定する */
 export type AccessKind =
   /** 誰でも停められる */
@@ -68,6 +77,12 @@ export type ParkingLot = LatLng & {
   maxStayMinutes: number | null;
   /** 車高制限（m）。不明なら null */
   maxHeightM: number | null;
+  /** 車幅制限（m）。不明なら null */
+  maxWidthM: number | null;
+  /** 車長制限（m）。不明なら null */
+  maxLengthM: number | null;
+  /** 路面（asphalt / gravel など）。不明なら null */
+  surface: string | null;
   /** 目的地からの直線距離(m) */
   distanceM: number;
   /** 目的地までの推定徒歩時間(分) */
@@ -96,6 +111,12 @@ export type RankedParking = ParkingLot & {
   confidence: number;
   /** 注意して扱うべき理由。「情報が少ない」など */
   cautions: string[];
+  /** 停めやすさ（0〜1）。構造と車両制限、路面から見積もる */
+  ease: number;
+  /** 停めやすさの見出し。はっきりした難点があるときは good にしない */
+  easeLevel: 'good' | 'fair' | 'poor';
+  /** 停めやすさの根拠。「屋外の平面」「車高1.55mまで」など */
+  easeNotes: string[];
 };
 
 /** レコメンドの絞り込み条件 */
@@ -106,8 +127,8 @@ export type ParkingFilters = {
   freeOnly: boolean;
   /** 屋根ありだけに絞る */
   coveredOnly: boolean;
-  /** 車高(m)。指定すると制限に引っかかる駐車場を除外 */
-  vehicleHeightM: number | null;
+  /** 乗る車の寸法。指定すると入れない駐車場を除外し、停めやすさにも効かせる */
+  vehicle: VehicleSize | null;
   /** 予定している滞在時間(分)。料金の見積もりに使う */
   stayMinutes: number;
   /** 今すぐ停められる（営業中の）駐車場だけに絞る */
@@ -120,7 +141,7 @@ export const DEFAULT_FILTERS: ParkingFilters = {
   maxWalkM: 500,
   freeOnly: false,
   coveredOnly: false,
-  vehicleHeightM: null,
+  vehicle: null,
   stayMinutes: 120,
   openNowOnly: false,
   reliableOnly: false,

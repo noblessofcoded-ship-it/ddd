@@ -1,4 +1,5 @@
 import { formatDuration } from '../lib/fee';
+import { VEHICLE_PRESETS, findVehicle } from '../lib/vehicle';
 import type { ParkingFilters } from '../types';
 
 const WALK_OPTIONS = [200, 300, 500, 800, 1200];
@@ -25,6 +26,23 @@ export function ParkingFilterBar({ filters, onChange }: Props) {
             {WALK_OPTIONS.map((meters) => (
               <option key={meters} value={meters}>
                 {meters}m以内
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="filters__row">
+          <span>車種</span>
+          <select
+            className="select"
+            value={filters.vehicle?.label ?? ''}
+            onChange={(event) => patch({ vehicle: findVehicle(event.target.value) })}
+            title="入れない駐車場を候補から外し、停めやすさの判定にも使います"
+          >
+            <option value="">指定なし</option>
+            {VEHICLE_PRESETS.map((preset) => (
+              <option key={preset.label} value={preset.label}>
+                {preset.label}
               </option>
             ))}
           </select>
@@ -80,14 +98,7 @@ export function ParkingFilterBar({ filters, onChange }: Props) {
         >
           屋根あり
         </button>
-        <button
-          type="button"
-          className={`chip ${filters.vehicleHeightM !== null ? 'chip--on' : ''}`}
-          aria-pressed={filters.vehicleHeightM !== null}
-          onClick={() => patch({ vehicleHeightM: filters.vehicleHeightM === null ? 2.1 : null })}
-        >
-          車高2.1m以上
-        </button>
+
       </div>
     </div>
   );

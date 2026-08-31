@@ -108,7 +108,7 @@ function parseCapacity(raw: string | undefined): number | null {
 }
 
 /** "2.1" / "2.1 m" をメートル数にする。フィート表記などは判定不能として null */
-function parseMaxHeight(raw: string | undefined): number | null {
+function parseMeters(raw: string | undefined): number | null {
   if (!raw) return null;
   const matched = raw.match(/^\s*(\d+(?:\.\d+)?)\s*m?\s*$/i);
   if (!matched) return null;
@@ -192,7 +192,10 @@ export function parseParkingElement(
     capacity: parseCapacity(tags.capacity),
     openingHours: tags.opening_hours ?? null,
     maxStayMinutes: parseMaxStay(tags.maxstay ?? tags['parking:condition:1:maxstay']),
-    maxHeightM: parseMaxHeight(tags.maxheight),
+    maxHeightM: parseMeters(tags.maxheight),
+    maxWidthM: parseMeters(tags.maxwidth),
+    maxLengthM: parseMeters(tags.maxlength),
+    surface: tags.surface ?? null,
     distanceM: Math.round(distance),
     walkMinutes: walkMinutes(distance),
   };
