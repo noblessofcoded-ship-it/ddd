@@ -1,6 +1,6 @@
 import { parseCharge, parseMaxStay } from '../lib/fee';
 import { distanceMeters, walkMinutes } from '../lib/geo';
-import type { FeeKind, LatLng, ParkingKind, ParkingLot } from '../types';
+import type { FeeKind, LatLng, ParkingKind, ParkingLot, Place } from '../types';
 
 /** 本家が混んでいるときのために複数のミラーを順に試す */
 const ENDPOINTS = [
@@ -130,6 +130,99 @@ export function dedupeParking(lots: ParkingLot[]): ParkingLot[] {
   return kept;
 }
 
+/**
+ * Overpass に問い合わせる。本家が混んでいることがあるのでミラーを順に試す。
+ */
+async function postOverpass(
+  data: string,
+  signal?: AbortSignal,
+): Promise<{ elements?: OverpassElement[] }> {
+  const body = new URLSearchParams({ data });
+  let lastError: unknown = null;
+
+  for (const endpoint of ENDPOINTS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        body,
+        signal,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return (await response.json()) as { elements?: OverpassElement[] };
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      lastError = error;
+    }
+  }
+
+  throw new Error(
+    `Overpass への問い合わせに失敗しました${lastError instanceof Error ? `: ${lastError.message}` : ''}`,
+  );
+}
+
+/** Overpass QL の正規表現リテラルに安全に埋め込めるようにする */
+export function escapeForOverpassRegex(raw: string): string {
+  return raw
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    // 利用者の入力は正規表現ではなくただの文字列として扱う
+    .replace(/[.*+?^${}()|[\]]/g, '\\$&');
+}
+
+/**
+ * 名前で地点を探す Overpass 検索。
+ * ジオコーダ（Photon / Nominatim）が拾えなかった POI でも、OSM 上に
+ * データさえあれば name タグの部分一致で見つけられることがある。
+ *
+ * 語は選択和（民生炒飯|台湾鍋）で 1 度に問い合わせる。
+ * 「台湾鍋 民生炒飯」のような複数語をそのまま正規表現にすると、
+ * 空白ごと一致する名前しか引っかからず必ず空振りするため。
+ * 範囲を絞らないと重すぎるので、必ず基準点まわりの半径で検索する。
+ */
+export async function searchPlacesByName(
+  terms: string[],
+  near: LatLng,
+  options: { signal?: AbortSignal; radiusM?: number; limit?: number } = {},
+): Promise<Place[]> {
+  // 1 文字の語は一致が多すぎて実用にならないので落とす
+  const usable = terms.map((term) => term.trim()).filter((term) => term.length >= 2);
+  if (usable.length === 0) return [];
+
+  const radius = options.radiusM ?? 30_000;
+  const limit = options.limit ?? 20;
+  const around = `around:${radius},${near.lat},${near.lng}`;
+  const pattern = usable.map(escapeForOverpassRegex).join('|');
+
+  const data = `[out:json][timeout:25];
+(
+  node["name"~"${pattern}"](${around});
+  way["name"~"${pattern}"](${around});
+);
+out center tags ${limit};`;
+
+  const json = await postOverpass(data, options.signal);
+
+  return (json.elements ?? []).flatMap((element) => {
+    const lat = element.lat ?? element.center?.lat;
+    const lng = element.lon ?? element.center?.lon;
+    const name = element.tags?.['name:ja'] ?? element.tags?.name;
+    if (typeof lat !== 'number' || typeof lng !== 'number' || !name) return [];
+
+    const address = [
+      element.tags?.['addr:province'] ?? element.tags?.['addr:state'],
+      element.tags?.['addr:city'],
+      element.tags?.['addr:suburb'],
+      element.tags?.['addr:block_number'],
+      element.tags?.['addr:housenumber'],
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    return [{ id: `osm:${element.type}/${element.id}`, name, address, lat, lng }];
+  });
+}
+
 function buildQuery(destination: LatLng, radiusM: number): string {
   const around = `around:${radiusM},${destination.lat},${destination.lng}`;
   return `[out:json][timeout:25];
@@ -147,31 +240,11 @@ export async function fetchNearbyParking(
   radiusM: number,
   options: { signal?: AbortSignal } = {},
 ): Promise<ParkingLot[]> {
-  const body = new URLSearchParams({ data: buildQuery(destination, radiusM) });
-  let lastError: unknown = null;
+  const json = await postOverpass(buildQuery(destination, radiusM), options.signal);
 
-  for (const endpoint of ENDPOINTS) {
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        body,
-        signal: options.signal,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const lots = (json.elements ?? [])
+    .map((element) => parseParkingElement(element, destination))
+    .filter((lot): lot is ParkingLot => lot !== null);
 
-      const json = (await response.json()) as { elements?: OverpassElement[] };
-      const lots = (json.elements ?? [])
-        .map((element) => parseParkingElement(element, destination))
-        .filter((lot): lot is ParkingLot => lot !== null);
-      return dedupeParking(lots);
-    } catch (error) {
-      if (options.signal?.aborted) throw error;
-      lastError = error;
-    }
-  }
-
-  throw new Error(
-    `駐車場の検索に失敗しました${lastError instanceof Error ? `: ${lastError.message}` : ''}`,
-  );
+  return dedupeParking(lots);
 }

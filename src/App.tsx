@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchNearbyParking } from './api/overpass';
 import { MapView } from './components/MapView';
 import { ParkingCard } from './components/ParkingCard';
@@ -6,8 +6,16 @@ import { ParkingFilterBar } from './components/ParkingFilterBar';
 import { PlaceSearch } from './components/PlaceSearch';
 import { RouteSummary } from './components/RouteSummary';
 import { useCurrentLocation } from './hooks/useCurrentLocation';
+import { reverseGeocode } from './api/photon';
+import { buildPlaceUrl } from './lib/googleMaps';
 import { rankParking } from './lib/score';
-import { DEFAULT_FILTERS, type ParkingFilters, type ParkingLot, type Place } from './types';
+import {
+  DEFAULT_FILTERS,
+  type LatLng,
+  type ParkingFilters,
+  type ParkingLot,
+  type Place,
+} from './types';
 
 /** Overpass を叩く半径。フィルタの上限より広く取り、絞り込みは手元で行う */
 const SEARCH_RADIUS_M = 1500;
@@ -23,36 +31,69 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const [pickingOnMap, setPickingOnMap] = useState(false);
   const currentLocation = useCurrentLocation();
+
+  /** 地図をタップして目的地を決める。地名は分かれば添える */
+  const handlePick = useCallback(async (point: LatLng) => {
+    setPickingOnMap(false);
+    const fallbackPlace: Place = {
+      id: `pin:${point.lat.toFixed(6)},${point.lng.toFixed(6)}`,
+      name: '地図で指定した地点',
+      address: `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`,
+      lat: point.lat,
+      lng: point.lng,
+    };
+
+    setDestination(fallbackPlace);
+    try {
+      const resolved = await reverseGeocode(point);
+      if (resolved) setDestination(resolved);
+    } catch {
+      // 地名が引けなくても座標は確定しているので、そのまま進める
+    }
+  }, []);
 
   useEffect(() => {
     if (currentLocation.place) setOrigin(currentLocation.place);
   }, [currentLocation.place]);
 
-  // 目的地が決まり、かつレコメンドが ON のときだけ駐車場を取りに行く
-  useEffect(() => {
-    if (!destination || !wantsParking) {
-      setLots([]);
-      setError(null);
-      return;
-    }
+  // 検索は明示的にボタンを押したときだけ走らせる
+  const requestRef = useRef<AbortController | null>(null);
+  const [searched, setSearched] = useState(false);
 
+  const searchParking = useCallback(async (target: Place) => {
+    requestRef.current?.abort();
     const controller = new AbortController();
+    requestRef.current = controller;
+
     setLoading(true);
     setError(null);
 
-    fetchNearbyParking(destination, SEARCH_RADIUS_M, { signal: controller.signal })
-      .then(setLots)
-      .catch((cause: unknown) => {
-        if (controller.signal.aborted) return;
-        setError(cause instanceof Error ? cause.message : '駐車場を取得できませんでした');
-        setLots([]);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+    try {
+      const found = await fetchNearbyParking(target, SEARCH_RADIUS_M, {
+        signal: controller.signal,
       });
+      if (controller.signal.aborted) return;
+      setLots(found);
+      setSearched(true);
+    } catch (cause) {
+      if (controller.signal.aborted) return;
+      setError(cause instanceof Error ? cause.message : '駐車場を取得できませんでした');
+      setLots([]);
+      setSearched(true);
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
+  }, []);
 
-    return () => controller.abort();
+  // 目的地やレコメンドの ON/OFF が変わったら、前回の検索結果は捨てる
+  useEffect(() => {
+    requestRef.current?.abort();
+    setLots([]);
+    setSelectedId(null);
+    setSearched(false);
+    setError(null);
   }, [destination, wantsParking]);
 
   // 営業状態は時刻に依存するので、1 分ごとに評価し直す
@@ -100,12 +141,33 @@ export default function App() {
             selected={destination}
             onSelect={setDestination}
             onClear={handleReset}
+            near={origin}
+            fallback={(query) => (
+              <div className="notfound__actions">
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => setPickingOnMap(true)}
+                >
+                  地図から指定する
+                </button>
+                <a
+                  className="btn btn--ghost"
+                  href={buildPlaceUrl(origin ?? { lat: 35.681236, lng: 139.767125 }, query)}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  Google マップで探す
+                </a>
+              </div>
+            )}
           />
 
           <PlaceSearch
             label="出発地（任意）"
             placeholder="未入力なら Google マップの現在地"
             selected={origin}
+            near={origin}
             onSelect={setOrigin}
             onClear={() => {
               setOrigin(null);
@@ -143,7 +205,16 @@ export default function App() {
           </label>
         </section>
 
-        {!destination && (
+        {pickingOnMap && (
+          <section className="banner">
+            <p>地図をタップして目的地を指定してください。</p>
+            <button type="button" className="btn btn--ghost" onClick={() => setPickingOnMap(false)}>
+              やめる
+            </button>
+          </section>
+        )}
+
+        {!destination && !pickingOnMap && (
           <section className="empty">
             <p>まず目的地を検索してください。</p>
             <p className="empty__note">
@@ -152,13 +223,14 @@ export default function App() {
           </section>
         )}
 
-        {destination && (
+        {(destination || pickingOnMap) && (
           <MapView
             destination={destination}
             origin={origin}
             lots={wantsParking ? ranked : []}
             selectedId={selectedId}
             onSelect={setSelectedId}
+            onPick={pickingOnMap ? handlePick : undefined}
           />
         )}
 
@@ -166,21 +238,29 @@ export default function App() {
           <section className="panel">
             <ParkingFilterBar filters={filters} onChange={setFilters} />
 
-            {loading && <p className="hint">周辺の駐車場を検索中…</p>}
+            <button
+              type="button"
+              className="btn btn--primary btn--block"
+              onClick={() => void searchParking(destination)}
+              disabled={loading}
+            >
+              {loading ? '検索中…' : searched ? 'この条件で再検索' : '周辺の駐車場を検索'}
+            </button>
+
             {error && (
               <p className="hint hint--error">
                 {error}
                 <button
                   type="button"
                   className="btn btn--ghost"
-                  onClick={() => setDestination({ ...destination })}
+                  onClick={() => void searchParking(destination)}
                 >
                   再試行
                 </button>
               </p>
             )}
 
-            {!loading && !error && ranked.length === 0 && (
+            {searched && !loading && !error && ranked.length === 0 && (
               <p className="hint">
                 条件に合う駐車場が見つかりませんでした。徒歩距離を広げるか、絞り込みを外してみてください。
               </p>
