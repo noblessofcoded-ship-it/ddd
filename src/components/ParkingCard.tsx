@@ -57,6 +57,8 @@ export function ParkingCard({
             <span className="card__meta">
               徒歩{lot.walkMinutes}分・{formatDistance(lot.distanceM)}
             </span>
+            {/* 「タイムズ」のような運営者名だけの表示は区別が付かないので住所を添える */}
+            {!lot.named && lot.address && <span className="card__meta">{lot.address}</span>}
           </div>
           <span className="score" title="おすすめ度">
             {lot.score}
