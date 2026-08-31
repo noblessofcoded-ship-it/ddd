@@ -319,6 +319,7 @@ export default function App() {
                     stayMinutes={filters.stayMinutes}
                     onSelect={() => setSelectedId(lot.id)}
                     onSaveFee={(charge) => setFeeNotes((notes) => saveFeeNote(notes, lot.id, charge))}
+                    areaHint={destination.address}
                   />
                 ))}
               </ul>

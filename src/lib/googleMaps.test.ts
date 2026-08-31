@@ -80,3 +80,9 @@ describe('buildPlaceUrl', () => {
     expect(paramsOf(buildPlaceUrl(parking, '   ')).get('query')).toBe('35.660100,139.701200');
   });
 });
+
+describe('buildPlaceUrl — 名前が無い地点', () => {
+  it('名前を渡さなければ座標で開く', () => {
+    expect(paramsOf(buildPlaceUrl(parking)).get('query')).toBe('35.660100,139.701200');
+  });
+});

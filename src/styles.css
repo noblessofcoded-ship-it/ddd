@@ -524,19 +524,28 @@ body {
   border: 1px solid #a7f3d0;
 }
 
-.feeform__open {
-  width: 100%;
-  padding: 8px 12px;
+/* 料金まわりの導線。調べる → 登録する の並びにする */
+.feeactions {
+  display: flex;
+  border-top: 1px solid var(--border);
+  background: #f8fafc;
+}
+.feeactions__item {
+  flex: 1;
+  padding: 9px 12px;
   font: inherit;
   font-size: 12px;
-  text-align: left;
+  text-align: center;
+  text-decoration: none;
   color: var(--brand);
-  background: #f8fafc;
+  background: none;
   border: 0;
-  border-top: 1px solid var(--border);
   cursor: pointer;
 }
-.feeform__open:hover {
+.feeactions__item + .feeactions__item {
+  border-left: 1px solid var(--border);
+}
+.feeactions__item:hover {
   background: #eff6ff;
 }
 .feeform {
