@@ -145,9 +145,9 @@ describe('searchPlaces', () => {
 
     const result = await searchPlaces('台湾鍋　民生炒飯', { near: OSAKA });
     expect(result.places.map((p) => p.name)).toEqual(['民生炒飯']);
-    expect(result.triedQueries).toEqual(['台湾鍋 民生炒飯', '民生炒飯']);
+    // 全語 → 全語（バイアスなし）→ 空白を詰めた形、の順に広げる
+    expect(result.triedQueries).toEqual(['台湾鍋 民生炒飯', '台湾鍋民生炒飯']);
     expect(result.relaxed).toBe(true);
-    // 全語（位置バイアスあり）→ 全語（バイアスなし）→ 語を落として、の 3 段
     expect(calls.filter((c) => c.includes('photon'))).toHaveLength(3);
   });
 
@@ -171,7 +171,8 @@ describe('searchPlaces', () => {
     await searchPlaces('台湾鍋　民生炒飯', { near: OSAKA });
 
     const overpassCall = calls.find((c) => c.startsWith('overpass:'));
-    expect(overpassCall).toContain('~"台湾鍋|民生炒飯"');
+    // 空白を詰めた形も選択和に含め、丸ごと一致も拾えるようにする
+    expect(overpassCall).toContain('~"台湾鍋民生炒飯|台湾鍋|民生炒飯"');
     expect(overpassCall).not.toContain('"台湾鍋 民生炒飯"');
   });
 
@@ -184,7 +185,8 @@ describe('searchPlaces', () => {
     await searchPlaces('東 民生炒飯', { near: OSAKA });
 
     const overpassCall = calls.find((c) => c.startsWith('overpass:'));
-    expect(overpassCall).toContain('~"民生炒飯"');
+    // 1 文字の「東」は落ち、空白を詰めた形と長い語だけが残る
+    expect(overpassCall).toContain('~"東民生炒飯|民生炒飯"');
   });
 
   it('現在地が無ければ Overpass の名称検索は行わない（範囲を絞れないため）', async () => {
