@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchNearbyParking } from './api/overpass';
+import { fetchNearbyParking, searchRadiusFor } from './api/overpass';
 import { MapView } from './components/MapView';
 import { ParkingCard } from './components/ParkingCard';
 import { ParkingFilterBar } from './components/ParkingFilterBar';
@@ -8,6 +8,7 @@ import { RouteSummary } from './components/RouteSummary';
 import { useCurrentLocation } from './hooks/useCurrentLocation';
 import { reverseGeocode } from './api/photon';
 import { buildPlaceUrl } from './lib/googleMaps';
+import { applyFeeNotes, loadFeeNotes, saveFeeNote, type FeeNotes } from './lib/feeStore';
 import { rankParking } from './lib/score';
 import {
   DEFAULT_FILTERS,
@@ -17,9 +18,6 @@ import {
   type Place,
 } from './types';
 
-/** Overpass を叩く半径。フィルタの上限より広く取り、絞り込みは手元で行う */
-const SEARCH_RADIUS_M = 1500;
-
 export default function App() {
   const [destination, setDestination] = useState<Place | null>(null);
   const [origin, setOrigin] = useState<Place | null>(null);
@@ -27,6 +25,10 @@ export default function App() {
   const [filters, setFilters] = useState<ParkingFilters>(DEFAULT_FILTERS);
 
   const [lots, setLots] = useState<ParkingLot[]>([]);
+  // 自分で登録した料金。端末に保存して次回以降も効かせる
+  const [feeNotes, setFeeNotes] = useState<FeeNotes>(() => loadFeeNotes());
+  // 実際に取得した半径。絞り込みを広げたときに再検索を促すため覚えておく
+  const [searchedRadiusM, setSearchedRadiusM] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -65,20 +67,20 @@ export default function App() {
   const requestRef = useRef<AbortController | null>(null);
   const [searched, setSearched] = useState(false);
 
-  const searchParking = useCallback(async (target: Place) => {
+  const searchParking = useCallback(async (target: Place, maxWalkM: number) => {
     requestRef.current?.abort();
     const controller = new AbortController();
     requestRef.current = controller;
 
+    const radius = searchRadiusFor(maxWalkM);
     setLoading(true);
     setError(null);
 
     try {
-      const found = await fetchNearbyParking(target, SEARCH_RADIUS_M, {
-        signal: controller.signal,
-      });
+      const found = await fetchNearbyParking(target, radius, { signal: controller.signal });
       if (controller.signal.aborted) return;
       setLots(found);
+      setSearchedRadiusM(radius);
       setSearched(true);
     } catch (cause) {
       if (controller.signal.aborted) return;
@@ -106,7 +108,10 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  const ranked = useMemo(() => rankParking(lots, filters, { now }), [lots, filters, now]);
+  const ranked = useMemo(
+    () => rankParking(applyFeeNotes(lots, feeNotes), filters, { now }),
+    [lots, feeNotes, filters, now],
+  );
 
   // 絞り込みで消えた駐車場が選ばれたままにならないようにする
   useEffect(() => {
@@ -262,7 +267,7 @@ export default function App() {
             <button
               type="button"
               className="btn btn--primary btn--block"
-              onClick={() => void searchParking(destination)}
+              onClick={() => void searchParking(destination, filters.maxWalkM)}
               disabled={loading}
             >
               {loading ? '検索中…' : searched ? 'この条件で再検索' : '周辺の駐車場を検索'}
@@ -274,12 +279,20 @@ export default function App() {
                 <button
                   type="button"
                   className="btn btn--ghost"
-                  onClick={() => void searchParking(destination)}
+                  onClick={() => void searchParking(destination, filters.maxWalkM)}
                 >
                   再試行
                 </button>
               </p>
             )}
+
+            {searched &&
+              searchedRadiusM !== null &&
+              searchRadiusFor(filters.maxWalkM) > searchedRadiusM && (
+                <p className="hint hint--error">
+                  検索したときより範囲を広げています。「この条件で再検索」を押してください。
+                </p>
+              )}
 
             {searched && !loading && !error && ranked.length === 0 && (
               <p className="hint">
@@ -305,6 +318,7 @@ export default function App() {
                     selected={lot.id === selectedId}
                     stayMinutes={filters.stayMinutes}
                     onSelect={() => setSelectedId(lot.id)}
+                    onSaveFee={(charge) => setFeeNotes((notes) => saveFeeNote(notes, lot.id, charge))}
                   />
                 ))}
               </ul>

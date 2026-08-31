@@ -161,6 +161,7 @@ export function parseParkingElement(
     lng,
     fee: parseFee(tags, feeNote),
     feeNote,
+    feeSource: 'osm',
     parsedFee: parseCharge(feeNote),
     kind,
     capacity: parseCapacity(tags.capacity),
@@ -205,34 +206,73 @@ export function dedupeParking(lots: ParkingLot[]): ParkingLot[] {
 }
 
 /**
- * Overpass に問い合わせる。本家が混んでいることがあるのでミラーを順に試す。
+ * 2 つ目以降のミラーを追い掛けで投げるまでの待ち時間。
+ *
+ * 全ミラーへ一斉に投げれば最速だが、無償で公開されているサーバに
+ * 毎回 2 倍の負荷をかけることになる。1 つ目が速ければ 2 つ目は投げずに済む、
+ * この待ち時間を挟む形にしている。
+ */
+const HEDGE_DELAY_MS = 1200;
+
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(new Error('aborted'));
+      },
+      { once: true },
+    );
+  });
+}
+
+/**
+ * Overpass に問い合わせる。
+ *
+ * 本家が落ちてはいなくても混雑して待たされることがあり、順番に試すと
+ * その待ち時間がまるごと体感速度に乗る。一定時間で応答が無ければ
+ * ミラーにも投げ、先に返ってきた方を採用する。
  */
 async function postOverpass(
   data: string,
   signal?: AbortSignal,
 ): Promise<{ elements?: OverpassElement[] }> {
   const body = new URLSearchParams({ data });
-  let lastError: unknown = null;
+  const controllers = ENDPOINTS.map(() => new AbortController());
+  const abortAll = () => controllers.forEach((controller) => controller.abort());
 
-  for (const endpoint of ENDPOINTS) {
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        body,
-        signal,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return (await response.json()) as { elements?: OverpassElement[] };
-    } catch (error) {
-      if (signal?.aborted) throw error;
-      lastError = error;
-    }
+  if (signal) {
+    if (signal.aborted) throw new Error('aborted');
+    signal.addEventListener('abort', abortAll, { once: true });
   }
 
-  throw new Error(
-    `Overpass への問い合わせに失敗しました${lastError instanceof Error ? `: ${lastError.message}` : ''}`,
-  );
+  const attempts = ENDPOINTS.map(async (endpoint, index) => {
+    if (index > 0) await delay(HEDGE_DELAY_MS * index, controllers[index].signal);
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      body,
+      signal: controllers[index].signal,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return (await response.json()) as { elements?: OverpassElement[] };
+  });
+
+  try {
+    const json = await Promise.any(attempts);
+    // 勝者が決まったので、まだ動いている問い合わせは止める
+    abortAll();
+    return json;
+  } catch (error) {
+    abortAll();
+    const cause = error instanceof AggregateError ? error.errors[0] : error;
+    throw new Error(
+      `Overpass への問い合わせに失敗しました${cause instanceof Error ? `: ${cause.message}` : ''}`,
+    );
+  }
 }
 
 /** Overpass QL の正規表現リテラルに安全に埋め込めるようにする */
@@ -297,6 +337,9 @@ out center tags ${limit};`;
   });
 }
 
+/** 1 回の問い合わせで受け取る上限。市街地でも十分で、応答を軽くできる */
+const MAX_ELEMENTS = 250;
+
 function buildQuery(destination: LatLng, radiusM: number): string {
   const around = `around:${radiusM},${destination.lat},${destination.lng}`;
   return `[out:json][timeout:25];
@@ -305,7 +348,30 @@ function buildQuery(destination: LatLng, radiusM: number): string {
   way["amenity"="parking"](${around});
   relation["amenity"="parking"](${around});
 );
-out center tags;`;
+out center tags ${MAX_ELEMENTS};`;
+}
+
+/**
+ * 取得半径を、実際に使う徒歩距離から決める。
+ * 面積は半径の 2 乗で効くので、常に最大範囲を取ると市街地では
+ * 応答がそのぶん重くなる。絞り込みより少し広めを取れば足りる。
+ */
+export function searchRadiusFor(maxWalkM: number): number {
+  return Math.min(1500, Math.max(400, Math.round(maxWalkM * 1.5)));
+}
+
+/** 同じ場所を繰り返し引かないための控え。絞り込みの調整中に効く */
+const cache = new Map<string, ParkingLot[]>();
+const CACHE_LIMIT = 20;
+
+function cacheKey(destination: LatLng, radiusM: number): string {
+  // 10m 程度の差は同じ検索とみなす
+  return `${destination.lat.toFixed(4)},${destination.lng.toFixed(4)}@${radiusM}`;
+}
+
+/** テスト用。モジュールをまたいで状態が残らないようにする */
+export function clearParkingCache(): void {
+  cache.clear();
 }
 
 /** 目的地の周辺半径 radiusM 以内の駐車場を取得する */
@@ -314,11 +380,20 @@ export async function fetchNearbyParking(
   radiusM: number,
   options: { signal?: AbortSignal } = {},
 ): Promise<ParkingLot[]> {
+  const key = cacheKey(destination, radiusM);
+  const cached = cache.get(key);
+  if (cached) return cached;
+
   const json = await postOverpass(buildQuery(destination, radiusM), options.signal);
 
-  const lots = (json.elements ?? [])
-    .map((element) => parseParkingElement(element, destination))
-    .filter((lot): lot is ParkingLot => lot !== null);
+  const lots = dedupeParking(
+    (json.elements ?? [])
+      .map((element) => parseParkingElement(element, destination))
+      .filter((lot): lot is ParkingLot => lot !== null),
+  );
 
-  return dedupeParking(lots);
+  if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value as string);
+  cache.set(key, lots);
+
+  return lots;
 }
