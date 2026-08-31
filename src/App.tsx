@@ -33,6 +33,13 @@ export default function App() {
   const [feeNotes, setFeeNotes] = useState<FeeNotes>(() => loadFeeNotes());
   // 実際に取得した半径。絞り込みを広げたときに再検索を促すため覚えておく
   const [searchedRadiusM, setSearchedRadiusM] = useState<number | null>(null);
+  // どの情報源から何件取れたか。効いているかを画面で確かめられるようにする
+  const [sources, setSources] = useState<{
+    osm: number;
+    yahoo: number;
+    combined: number;
+    yahooFailed: boolean;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -83,14 +90,24 @@ export default function App() {
 
     try {
       // 片方が落ちても、もう片方の結果で案内は続けられるようにする
+      let yahooFailed = false;
       const [osmLots, yahooLots] = await Promise.all([
         fetchNearbyParking(target, radius, { signal: controller.signal }),
-        fetchYahooParking(target, radius, yahooAppId, { signal: controller.signal }).catch(
-          () => [],
-        ),
+        fetchYahooParking(target, radius, yahooAppId, { signal: controller.signal }).catch(() => {
+          yahooFailed = true;
+          return [];
+        }),
       ]);
       if (controller.signal.aborted) return;
-      setLots(mergeParking(osmLots, yahooLots));
+
+      const merged = mergeParking(osmLots, yahooLots);
+      setLots(merged.lots);
+      setSources({
+        osm: osmLots.length,
+        yahoo: yahooLots.length,
+        combined: merged.combined,
+        yahooFailed,
+      });
       setSearchedRadiusM(radius);
       setSearched(true);
     } catch (cause) {
@@ -110,6 +127,7 @@ export default function App() {
     setSelectedId(null);
     setSearched(false);
     setError(null);
+    setSources(null);
   }, [destination, wantsParking]);
 
   // 営業状態は時刻に依存するので、1 分ごとに評価し直す
@@ -325,6 +343,17 @@ export default function App() {
             {searched && !loading && !error && ranked.length === 0 && (
               <p className="hint">
                 条件に合う駐車場が見つかりませんでした。徒歩距離を広げるか、絞り込みを外してみてください。
+              </p>
+            )}
+
+            {sources && (
+              <p className="sources">
+                情報源：地図データ {sources.osm}件
+                {yahooAppId
+                  ? ` ／ Yahoo! ${sources.yahoo}件`
+                  : ' ／ Yahoo! 未設定（「店舗の検索精度を上げる」から設定できます）'}
+                {sources.combined > 0 && `（うち${sources.combined}件は同じ駐車場として統合）`}
+                {sources.yahooFailed && ' ／ Yahoo! は応答しませんでした'}
               </p>
             )}
 

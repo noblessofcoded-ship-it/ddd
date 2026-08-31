@@ -93,34 +93,66 @@ describe('combine', () => {
 
 describe('mergeParking', () => {
   it('近接していて名前が矛盾しなければ 1 件にまとめる', () => {
-    const merged = mergeParking([lot()], [yahooLot()]);
-    expect(merged).toHaveLength(1);
-    expect(merged[0].name).toBe('タイムズ天満第2');
-    expect(merged[0].capacity).toBe(20);
+    const { lots, combined } = mergeParking([lot()], [yahooLot()]);
+    expect(lots).toHaveLength(1);
+    expect(lots[0].name).toBe('タイムズ天満第2');
+    expect(lots[0].capacity).toBe(20);
+    expect(combined).toBe(1);
   });
 
   it('離れていれば別の駐車場として残す', () => {
-    const merged = mergeParking([lot()], [yahooLot({ lat: 34.7105 })]);
-    expect(merged).toHaveLength(2);
+    expect(mergeParking([lot()], [yahooLot({ lat: 34.7105 })]).lots).toHaveLength(2);
   });
 
   it('名前が矛盾すれば別の駐車場として残す', () => {
-    const merged = mergeParking([lot()], [yahooLot({ name: '三井のリパーク天満' })]);
-    expect(merged).toHaveLength(2);
+    const { lots } = mergeParking([lot({ named: true })], [yahooLot({ name: '三井のリパーク天満' })]);
+    expect(lots).toHaveLength(2);
   });
 
   it('OSM に無い駐車場を足す', () => {
-    const merged = mergeParking([], [yahooLot()]);
-    expect(merged.map((l) => l.source)).toEqual(['yahoo']);
+    const { lots, addedFromYahoo } = mergeParking([], [yahooLot()]);
+    expect(lots.map((l) => l.source)).toEqual(['yahoo']);
+    expect(addedFromYahoo).toBe(1);
   });
 
   it('1 つの Yahoo! の駐車場を 2 件に使い回さない', () => {
-    const merged = mergeParking([lot({ id: 'node/1' }), lot({ id: 'node/2' })], [yahooLot()]);
-    expect(merged).toHaveLength(2);
-    expect(merged.filter((l) => l.name === 'タイムズ天満第2')).toHaveLength(1);
+    const { lots } = mergeParking([lot({ id: 'node/1' }), lot({ id: 'node/2' })], [yahooLot()]);
+    expect(lots).toHaveLength(2);
+    expect(lots.filter((l) => l.name === 'タイムズ天満第2')).toHaveLength(1);
   });
 
   it('Yahoo! が空でも OSM の結果はそのまま', () => {
-    expect(mergeParking([lot()], [])).toHaveLength(1);
+    const { lots, combined, addedFromYahoo } = mergeParking([lot()], []);
+    expect(lots).toHaveLength(1);
+    expect(combined).toBe(0);
+    expect(addedFromYahoo).toBe(0);
+  });
+});
+
+describe('mergeParking — 名前が手がかりにならない駐車場', () => {
+  /** OSM に「駐車場（名称なし）」としてしか無い駐車場 */
+  const anonymous = (overrides: Partial<ParkingLot> = {}) =>
+    lot({ name: '駐車場（名称なし）', named: false, operator: null, ...overrides });
+
+  it('名前が違っても、すぐ近くなら同じ駐車場として合成する', () => {
+    // 名前で裏が取れないことを理由に別物と決めつけると、
+    // 同じ駐車場が二重に並び、名前も付かないままになる
+    const { lots, combined } = mergeParking([anonymous()], [yahooLot({ name: 'カーピット天満' })]);
+    expect(lots).toHaveLength(1);
+    expect(lots[0].name).toBe('カーピット天満');
+    expect(lots[0].capacity).toBe(20);
+    expect(combined).toBe(1);
+  });
+
+  it('名前が手がかりにならない場合は距離を厳しく見る', () => {
+    // 50m 離れていれば、別の駐車場を巻き込まないよう合成しない
+    const far = yahooLot({ name: 'カーピット天満', lat: 34.7055 + 0.00045 });
+    expect(mergeParking([anonymous()], [far]).lots).toHaveLength(2);
+  });
+
+  it('名前で裏が取れる場合は少し離れていても合成する', () => {
+    // OSM は区画の中心、Yahoo! は出入口付近を指していることがある
+    const far = yahooLot({ lat: 34.7055 + 0.00045 });
+    expect(mergeParking([lot()], [far]).lots).toHaveLength(1);
   });
 });

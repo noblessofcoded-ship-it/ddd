@@ -1,8 +1,19 @@
 import { distanceMeters } from './geo';
 import type { ParkingLot } from '../types';
 
-/** 同じ駐車場とみなす距離。区画の広い駐車場でも中心点はこの程度に収まる */
-const SAME_LOT_DISTANCE_M = 45;
+/**
+ * 同じ駐車場とみなす距離。
+ * 名前で裏が取れる場合は広めに見る。OSM は区画の中心点、Yahoo! は
+ * 出入口付近を指していることがあり、同じ駐車場でもずれるため。
+ */
+const SAME_LOT_DISTANCE_M = 70;
+
+/**
+ * 名前で裏が取れない場合の距離。
+ * 「駐車場（名称なし）」のように名前が手がかりにならないときは、
+ * 別の駐車場を巻き込まないよう近さだけで慎重に判断する。
+ */
+const UNNAMED_DISTANCE_M = 30;
 
 /** 比較用に名前を揃える */
 function fold(name: string): string {
@@ -23,9 +34,23 @@ export function namesLookSame(a: string, b: string): boolean {
   return left.includes(right) || right.includes(left);
 }
 
-/** OSM 側に名前が無いか、運営者名だけの状態か */
+/** 固有名が無く、名前が突き合わせの手がかりにならない状態か */
 function lacksProperName(lot: ParkingLot): boolean {
   return !lot.named;
+}
+
+/**
+ * 同じ駐車場とみなせるか。
+ *
+ * 名前が手がかりにならない側があるときは、名前の不一致を理由に
+ * 別物と決めつけない。代わりに距離を厳しくする。
+ */
+export function isSameLot(osm: ParkingLot, yahoo: ParkingLot): boolean {
+  const distance = distanceMeters(osm, yahoo);
+  if (lacksProperName(osm) && !namesLookSame(osm.name, yahoo.name)) {
+    return distance <= UNNAMED_DISTANCE_M;
+  }
+  return distance <= SAME_LOT_DISTANCE_M && namesLookSame(osm.name, yahoo.name);
 }
 
 /**
@@ -44,22 +69,27 @@ export function combine(osm: ParkingLot, yahoo: ParkingLot): ParkingLot {
   };
 }
 
+/** 突き合わせの結果。何がどれだけ効いたかを画面に出すために使う */
+export type MergeResult = {
+  lots: ParkingLot[];
+  /** 同じ駐車場として合成した件数 */
+  combined: number;
+  /** Yahoo! にしかなかった駐車場の件数 */
+  addedFromYahoo: number;
+};
+
 /**
  * OSM と Yahoo! の駐車場を突き合わせる。
  *
- * 近接していて名前が矛盾しないものは同じ駐車場として合成し、
- * 片方にしかないものはそのまま残す。
+ * 同じ駐車場と判断したものは合成し、片方にしかないものはそのまま残す。
  */
-export function mergeParking(osmLots: ParkingLot[], yahooLots: ParkingLot[]): ParkingLot[] {
+export function mergeParking(osmLots: ParkingLot[], yahooLots: ParkingLot[]): MergeResult {
   const merged = [...osmLots];
   const usedYahoo = new Set<string>();
 
   merged.forEach((lot, index) => {
     const match = yahooLots.find(
-      (candidate) =>
-        !usedYahoo.has(candidate.id) &&
-        distanceMeters(lot, candidate) <= SAME_LOT_DISTANCE_M &&
-        namesLookSame(lot.name, candidate.name),
+      (candidate) => !usedYahoo.has(candidate.id) && isSameLot(lot, candidate),
     );
     if (!match) return;
 
@@ -67,6 +97,11 @@ export function mergeParking(osmLots: ParkingLot[], yahooLots: ParkingLot[]): Pa
     merged[index] = combine(lot, match);
   });
 
-  // OSM に無かった駐車場を足す
-  return [...merged, ...yahooLots.filter((lot) => !usedYahoo.has(lot.id))];
+  const onlyYahoo = yahooLots.filter((lot) => !usedYahoo.has(lot.id));
+
+  return {
+    lots: [...merged, ...onlyYahoo],
+    combined: usedYahoo.size,
+    addedFromYahoo: onlyYahoo.length,
+  };
 }
