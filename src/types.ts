@@ -54,6 +54,8 @@ export type ParkingLot = LatLng & {
   id: string;
   /** 情報の出どころ。実在の確からしさの評価が変わる */
   source: ParkingSource;
+  /** 別の情報源で名前や住所を補ったか。効いているかを画面で確かめられるようにする */
+  enrichedBy: 'yahoo' | null;
   name: string;
   /**
    * 固有の名前が登録されていたか。

@@ -694,6 +694,11 @@ body {
   background: #eff6ff;
 }
 
+.badge--yahoo {
+  background: #eff6ff;
+  color: var(--brand-dark);
+  border-color: #bfdbfe;
+}
 .badge {
   font-size: 10px;
   font-weight: 700;
@@ -814,10 +819,43 @@ body {
 .footer {
   position: sticky;
   bottom: 0;
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  padding: 0 16px calc(12px + env(safe-area-inset-bottom));
   background: rgb(255 255 255 / 0.94);
   backdrop-filter: blur(8px);
   border-top: 1px solid var(--border);
+}
+
+/* つまんで上下に払える帯。タップでも開閉できる */
+.footer__handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 0 10px;
+  background: none;
+  border: 0;
+  cursor: grab;
+  font: inherit;
+  touch-action: none;
+}
+.footer__grip {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  flex: 0 0 auto;
+}
+.footer__peek {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.footer--collapsed .footer__handle {
+  padding: 10px 0;
 }
 .summary {
   display: flex;

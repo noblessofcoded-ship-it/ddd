@@ -119,6 +119,7 @@ describe('dedupeParking', () => {
     lat: 35.66,
     lng: 139.701,
     source: 'osm',
+    enrichedBy: null,
     named: true,
     address: null,
     access: 'public',

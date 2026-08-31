@@ -63,6 +63,7 @@ export function toParkingLots(response: YahooResponse, destination: LatLng): Par
       {
         id: `yahoo:${feature.Property?.Uid ?? feature.Id ?? `${point.lat},${point.lng}`}`,
         source: 'yahoo' as const,
+        enrichedBy: null,
         name,
         named: true,
         address: feature.Property?.Address?.trim() || null,
@@ -105,7 +106,9 @@ export async function fetchNearbyParking(
   if (!appId) return [];
 
   const response = await jsonp<YahooResponse>(
-    buildParkingSearchUrl(destination, radiusM, appId, options.limit ?? 30),
+    // 市街地では半径 750m でも駐車場が数十件あり、距離順で切られると
+    // 少し離れたものが落ちてしまう。取れるだけ取っておく
+    buildParkingSearchUrl(destination, radiusM, appId, options.limit ?? 100),
     { signal: options.signal },
   );
 

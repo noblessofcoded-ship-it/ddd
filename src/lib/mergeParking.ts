@@ -15,9 +15,17 @@ const SAME_LOT_DISTANCE_M = 70;
  */
 const UNNAMED_DISTANCE_M = 30;
 
-/** 比較用に名前を揃える */
+/**
+ * 比較用に名前を揃える。
+ * 「タイムズ24」のような屋号末尾の数字は法人名の一部で、
+ * 個々の駐車場名（「タイムズ天満橋筋」）には現れないので落とす。
+ */
 function fold(name: string): string {
-  return name.normalize('NFKC').toLowerCase().replace(/[\s　・･（）()]/g, '');
+  return name
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\s　・･（）()]/g, '')
+    .replace(/\d+$/, '');
 }
 
 /**
@@ -34,6 +42,16 @@ export function namesLookSame(a: string, b: string): boolean {
   return left.includes(right) || right.includes(left);
 }
 
+/**
+ * OSM 側の呼び名すべてで突き合わせる。
+ * 名前が運営者名のこともあれば、名前と運営者が食い違うこともあるため。
+ */
+function anyNameLooksSame(osm: ParkingLot, yahooName: string): boolean {
+  return [osm.name, osm.operator]
+    .filter((name): name is string => Boolean(name))
+    .some((name) => namesLookSame(name, yahooName));
+}
+
 /** 固有名が無く、名前が突き合わせの手がかりにならない状態か */
 function lacksProperName(lot: ParkingLot): boolean {
   return !lot.named;
@@ -47,10 +65,10 @@ function lacksProperName(lot: ParkingLot): boolean {
  */
 export function isSameLot(osm: ParkingLot, yahoo: ParkingLot): boolean {
   const distance = distanceMeters(osm, yahoo);
-  if (lacksProperName(osm) && !namesLookSame(osm.name, yahoo.name)) {
-    return distance <= UNNAMED_DISTANCE_M;
-  }
-  return distance <= SAME_LOT_DISTANCE_M && namesLookSame(osm.name, yahoo.name);
+  if (anyNameLooksSame(osm, yahoo.name)) return distance <= SAME_LOT_DISTANCE_M;
+  // 名前で裏が取れないので、別の駐車場を巻き込まないよう近さだけで慎重に判断する
+  if (lacksProperName(osm)) return distance <= UNNAMED_DISTANCE_M;
+  return false;
 }
 
 /**
@@ -60,12 +78,15 @@ export function isSameLot(osm: ParkingLot, yahoo: ParkingLot): boolean {
  * どちらか一方だけでは不足するので、両方から埋める。
  */
 export function combine(osm: ParkingLot, yahoo: ParkingLot): ParkingLot {
+  // 運営者名がそのまま名前になっている場合も、Yahoo! の方が具体的
+  const osmNameIsBrand = osm.operator !== null && namesLookSame(osm.name, osm.operator);
+
   return {
     ...osm,
-    // 固有名が無いか運営者名だけなら、Yahoo! の名前の方が役に立つ
-    name: lacksProperName(osm) ? yahoo.name : osm.name,
+    name: lacksProperName(osm) || osmNameIsBrand ? yahoo.name : osm.name,
     named: osm.named || yahoo.named,
     address: osm.address ?? yahoo.address,
+    enrichedBy: 'yahoo',
   };
 }
 

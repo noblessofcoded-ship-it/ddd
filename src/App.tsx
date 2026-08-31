@@ -14,6 +14,7 @@ import { applyFeeNotes, loadFeeNotes, saveFeeNote, type FeeNotes } from './lib/f
 import { mergeParking } from './lib/mergeParking';
 import { loadYahooAppId, saveYahooAppId } from './lib/settings';
 import { rankParking } from './lib/score';
+import { swipeIntent } from './lib/swipe';
 import {
   DEFAULT_FILTERS,
   type LatLng,
@@ -46,6 +47,42 @@ export default function App() {
 
   const [pickingOnMap, setPickingOnMap] = useState(false);
   const [yahooAppId, setYahooAppId] = useState<string | null>(() => loadYahooAppId());
+  // 下のパネルは地図やカードを隠すので、たためるようにする
+  const [footerCollapsed, setFooterCollapsed] = useState(false);
+  const dragStartY = useRef<number | null>(null);
+  // スワイプの直後には click も飛んでくる。そのまま通すと開閉を打ち消し合う
+  const swiped = useRef(false);
+
+  const handleDragStart = (event: React.PointerEvent<HTMLButtonElement>) => {
+    dragStartY.current = event.clientY;
+    // スワイプ後に click が飛んでこないこともあるので、押し始めで毎回戻す
+    swiped.current = false;
+    // 捕捉しないと、指が帯の外に出た時点で pointerup を受け取れなくなる
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleDragEnd = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const start = dragStartY.current;
+    dragStartY.current = null;
+    if (start === null) return;
+
+    const intent = swipeIntent(event.clientY - start, footerCollapsed);
+    if (!intent) return;
+
+    swiped.current = true;
+    setFooterCollapsed(intent === 'collapse');
+  };
+
+  const handleHandleClick = () => {
+    if (swiped.current) {
+      swiped.current = false;
+      return;
+    }
+    setFooterCollapsed((collapsed) => !collapsed);
+  };
   const currentLocation = useCurrentLocation();
 
   // 検索の基準点。出発地を決めていなくても、端末の現在地が取れていれば使う
@@ -388,13 +425,34 @@ export default function App() {
       </main>
 
       {destination && (
-        <footer className="footer">
+        <footer className={`footer ${footerCollapsed ? 'footer--collapsed' : ''}`}>
+          <button
+            type="button"
+            className="footer__handle"
+            onPointerDown={handleDragStart}
+            onPointerUp={handleDragEnd}
+            onClick={handleHandleClick}
+            aria-expanded={!footerCollapsed}
+            aria-label={footerCollapsed ? 'ルートを開く' : 'ルートをたたむ'}
+          >
+            <span className="footer__grip" aria-hidden="true" />
+            {footerCollapsed && (
+              <span className="footer__peek">
+                {wantsParking && selectedParking
+                  ? `${selectedParking.name} に駐車`
+                  : `${destination.name} まで`}
+              </span>
+            )}
+          </button>
+
+          <div className="footer__body" hidden={footerCollapsed}>
           <RouteSummary
             origin={origin}
             destination={destination}
             parking={wantsParking ? selectedParking : null}
             stayMinutes={filters.stayMinutes}
           />
+          </div>
         </footer>
       )}
     </div>
