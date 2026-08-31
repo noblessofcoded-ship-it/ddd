@@ -53,7 +53,8 @@ APIキーの設定は不要です。そのまま動きます。
 無関係な地点をそれらしく返してくるためです。そこで `matchScore`（名前に検索語が
 含まれるか）で当たりを判定し、当たりが出るまで次の順に手を広げます。
 
-1. **Photon と Nominatim を同時に引く（現在地を優先）**
+1. **Yahoo!・Photon・Nominatim を同時に引く（現在地を優先）**
+   Yahoo! ローカルサーチAPI は全国の電話帳データをもとにした独自の店舗情報を持ち、
    Photon（komoot）は POI 名の検索とタイポに強く、Nominatim は住所に強い
 2. **名前の合う結果が無ければ、位置バイアスを外して引き直す**
    現在地の近さをかなり強く効かせている（`location_bias_scale=0.1`）ぶん、
@@ -235,10 +236,42 @@ opening_hours の仕様は非常に大きいため、**確実に読める書式�
 一般利用できない駐車場（`access=private` / `no` / `permit`、`parking=private`）は候補から除外します。
 同じ駐車場が node と way の両方で登録されている場合は、同名かつ 30m 以内なら 1 件に束ねます。
 
+## Yahoo! ローカルサーチAPI（任意）
+
+**OpenStreetMap には個人商店が登録されていないことが多く、それが検索の取りこぼしの
+主な原因です。** Photon も Nominatim も Overpass も同じ OSM を読んでいるので、
+そこに無い店はどれでも見つかりません。
+
+Yahoo! ローカルサーチAPI は独自の店舗データを持つため、この穴を埋められます。
+無料で、1 日 5 万件まで使えます。
+
+### 設定
+
+画面の「店舗の検索精度を上げる」を開き、
+[Yahoo!デベロッパーネットワーク](https://e.developer.yahoo.co.jp/register)で
+発行した Client ID を貼り付けてください。
+
+**Client ID はソースに含めていません。** 公開リポジトリの静的サイトなので、
+書けば誰でも読めてしまうためです。入力した ID は**その端末の localStorage
+にだけ**保存され、送信先は Yahoo! のAPIだけです。
+
+自分で配信する場合は、ビルド時に `VITE_YAHOO_APP_ID` を渡すこともできます
+（ただしバンドルに埋め込まれるため、配信先が公開なら ID も公開されます）。
+
+未設定でもアプリは今までどおり OSM だけで動きます。
+
+### JSONP を使っている理由
+
+Yahoo! のAPIは CORS ヘッダを返さないため `fetch` では読めません。
+ローカルサーチAPIは JSONP に対応しているので、`script` タグ経由で取得しています
+（`src/lib/jsonp.ts`）。これにより中継サーバを立てずに静的サイトから呼べます。
+取得先のスクリプトをそのまま実行することになるため、この方式は Yahoo! に対してだけ使っています。
+
 ## データソース
 
 | 用途 | サービス |
 | --- | --- |
+| 店舗検索（独自データ・任意） | [Yahoo!ローカルサーチAPI](https://developer.yahoo.co.jp/webapi/map/openlocalplatform/v1/localsearch.html) |
 | 地点検索（POI・タイポ許容・位置バイアス） | [Photon](https://photon.komoot.io/) |
 | 地点検索（住所） | [Nominatim](https://nominatim.org/) |
 | 地点検索の最終手段（name タグの直接検索） | [Overpass API](https://overpass-api.de/) |
@@ -278,6 +311,7 @@ npm run build      # 本番ビルド
 ```
 src/
 ├── api/
+│   ├── yahooLocal.ts  # Yahoo! ローカルサーチ（任意・独自の店舗データ）
 │   ├── nominatim.ts   # 住所寄りの地点検索
 │   ├── photon.ts      # POI 寄りの地点検索と逆ジオコーディング
 │   ├── placeSearch.ts # 上記をまとめ、段階的に条件を緩める検索層
@@ -294,7 +328,9 @@ src/
 ├── lib/
 │   ├── fee.ts           # 料金文字列のパースと概算
 │   ├── feeStore.ts      # 自分で登録した料金の保存と反映
+│   ├── jsonp.ts         # CORS 非対応のAPIを script タグ経由で読む
 │   ├── query.ts         # 検索クエリの正規化・緩和と名前の一致度
+│   ├── settings.ts      # Yahoo! の Client ID の保存
 │   ├── webSearch.ts     # 料金を調べるための検索語の組み立て
 │   ├── geo.ts           # 距離・徒歩時間
 │   ├── googleMaps.ts    # Google Maps URL の組み立て

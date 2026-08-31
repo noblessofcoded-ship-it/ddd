@@ -4,12 +4,18 @@ import type { LatLng, Place } from '../types';
 import { searchPlaces as searchNominatim } from './nominatim';
 import { searchPlacesByName } from './overpass';
 import { searchPlaces as searchPhoton } from './photon';
+import { searchPlaces as searchYahoo } from './yahooLocal';
 
 export type PlaceSearchOptions = {
   signal?: AbortSignal;
   /** 現在地。近い順に並べ替え、各サービスの検索も周辺優先にする */
   near?: LatLng | null;
   limit?: number;
+  /**
+   * Yahoo! ローカルサーチAPI の Client ID。
+   * 設定されていれば、OSM に無い店舗も探せるようになる。
+   */
+  yahooAppId?: string | null;
   /**
    * 途中経過を受け取る。
    * 語を落とす再検索や Overpass の直引きは時間がかかるので、
@@ -125,7 +131,7 @@ export async function searchPlaces(
   rawQuery: string,
   options: PlaceSearchOptions = {},
 ): Promise<PlaceSearchResult> {
-  const { signal, near = null, limit = 12, onPartial } = options;
+  const { signal, near = null, limit = 12, yahooAppId = null, onPartial } = options;
   const normalized = normalizeQuery(rawQuery);
   if (normalized.length === 0) {
     return {
@@ -182,7 +188,17 @@ export async function searchPlaces(
 
   for (const attempt of attempts) {
     attemptsRun += 1;
-    const [photon, nominatim] = await Promise.all([
+    const [yahoo, photon, nominatim] = await Promise.all([
+      // Yahoo! は独自の店舗データを持つので、OSM に無い店を拾える。
+      // 先に置いて、同じ地点が重なったときはこちらの情報を残す
+      settled(
+        searchYahoo(attempt.query, yahooAppId, {
+          signal,
+          near: attempt.near,
+          limit: FETCH_LIMIT,
+        }),
+        markFailed,
+      ),
       settled(
         searchPhoton(attempt.query, { signal, near: attempt.near, limit: FETCH_LIMIT }),
         markFailed,
@@ -194,7 +210,7 @@ export async function searchPlaces(
     ]);
 
     if (!triedQueries.includes(attempt.query)) triedQueries.push(attempt.query);
-    collected = mergePlaces([collected, photon, nominatim]);
+    collected = mergePlaces([collected, yahoo, photon, nominatim]);
 
     if (hasRelevantHit(collected, tokens) || signal?.aborted) break;
 
