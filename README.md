@@ -1,1 +1,135 @@
-# ddd
+# パーキングルート
+
+目的地（店・施設）を設定すると、その周辺のおすすめ駐車場をレコメンドし、
+決めたルートを **Google マップに引き渡す** ルート案内アプリです。
+
+駐車場をレコメンドするかどうかはトグルで選べます。OFF にすれば目的地まで直行のルートになります。
+
+## 公開（GitHub Pages）
+
+`.github/workflows/deploy.yml` が `main` へのプッシュで自動的にビルドしてデプロイします。
+型チェックとテストが通らなければデプロイされません。
+
+初回だけ、GitHub 側で 2 つ設定が必要です。
+
+1. **リポジトリを public にする**
+   Settings → 一番下の Danger Zone → *Change repository visibility* → Public
+   （private のままだと GitHub Pages は有料プランが必要です）
+2. **Pages を有効にする**
+   Settings → Pages → *Source* を **GitHub Actions** に変更
+
+公開先は `https://<ユーザー名>.github.io/<リポジトリ名>/` です。
+サブパス配下で配信されるため、ビルド時に `BASE_PATH` 環境変数でベースパスを渡しています
+（ワークフローがリポジトリ名から自動で組み立てます）。
+
+## 使い方
+
+```bash
+npm install
+npm run dev      # http://localhost:5173
+```
+
+APIキーの設定は不要です。そのまま動きます。
+
+## 画面の流れ
+
+1. **目的地を検索** — 店名・施設名・住所で検索して選ぶ
+2. **出発地を指定（任意）** — 「現在地」ボタン、または検索。未指定なら Google マップ側の現在地が使われる
+3. **駐車場をおすすめする（トグル）**
+   - **ON** — 周辺の駐車場をスコア順に提示。カードか地図のピンで 1 つ選ぶ
+   - **OFF** — 駐車場をはさまず目的地まで直行
+4. **ルート確定** — 下部のボタンで Google マップを開く
+
+## Google マップへの引き渡し
+
+[Google Maps URLs](https://developers.google.com/maps/documentation/urls/get-started) を組み立てて開きます。
+アプリが入っていれば Google マップアプリが、なければブラウザ版が開きます。
+
+| ボタン | ルート | travelmode |
+| --- | --- | --- |
+| 駐車場までナビを開始 | 出発地 → 駐車場（`dir_action=navigate` で即ナビ開始） | driving |
+| 駐車場からの徒歩ルート | 駐車場 → 目的地 | walking |
+| 駐車場を経由地にして開く | 出発地 → 駐車場（経由）→ 目的地 | driving |
+| Google マップでナビを開始（レコメンド OFF 時） | 出発地 → 目的地 | driving |
+
+地点は名前ではなく緯度経度（小数 6 桁）で渡しています。名前で渡すと Google 側の
+ジオコーディングで別の同名店舗に解決されることがあるためです。
+
+## レコメンドのしくみ
+
+`src/lib/score.ts` が 4 つの軸を重みづけして 0〜100 のおすすめ度を出します。
+
+| 軸 | 重み | 内容 |
+| --- | ---: | --- |
+| 近さ | 50 | 目的地からの距離。許容徒歩距離の 2 倍で 0 点 |
+| 料金 | 20 | 無料 > 有料 > 不明（不明は期待を裏切らないよう有料より低く見積もる） |
+| 収容台数 | 15 | 満車リスクの代理指標。100 台で頭打ち |
+| 快適さ | 15 | 屋根あり（立体・地下）、24 時間営業 |
+
+絞り込み（`ParkingFilters`）はスコアリングの前に適用されます。
+
+- 目的地からの距離（200m〜1200m）
+- 無料のみ
+- 屋根あり
+- 車高 2.1m 以上（`maxheight` タグで判定。制限が未登録のものは残す）
+
+一般利用できない駐車場（`access=private` / `no` / `permit`、`parking=private`）は候補から除外します。
+同じ駐車場が node と way の両方で登録されている場合は、同名かつ 30m 以内なら 1 件に束ねます。
+
+## データソース
+
+| 用途 | サービス |
+| --- | --- |
+| 地点検索（ジオコーディング） | [Nominatim](https://nominatim.org/) |
+| 駐車場データ（`amenity=parking`） | [Overpass API](https://overpass-api.de/) |
+| 地図タイル | OpenStreetMap |
+
+いずれも OpenStreetMap 由来で、APIキー・課金設定が要りません。Nominatim の利用規約に沿って
+検索リクエストは 500ms デバウンスし、キー入力ごとには投げません。Overpass は本家が混んでいるときのために
+ミラーへフォールバックします。
+
+**Google Places API に差し替えたい場合** は `src/api/overpass.ts` の `fetchNearbyParking`
+（と `src/api/nominatim.ts` の `searchPlaces`）を同じシグネチャで置き換えれば、UI もスコアリングもそのまま使えます。
+Places なら営業中判定や口コミ評価も取れるので、`ParkingLot` に項目を足して `score.ts` の軸を増やす形になります。
+
+## 開発
+
+```bash
+npm run dev        # 開発サーバ
+npm test           # ユニットテスト（46 件）
+npm run typecheck  # 型チェック
+npm run build      # 本番ビルド
+```
+
+テストは副作用のないロジック（距離計算・スコアリング・OSM タグのパース・Google マップ URL の組み立て）に絞っています。
+
+## 構成
+
+```
+src/
+├── api/
+│   ├── nominatim.ts   # 地点検索
+│   └── overpass.ts    # 駐車場取得と OSM タグのパース
+├── components/
+│   ├── MapView.tsx          # Leaflet の地図とピン
+│   ├── ParkingCard.tsx      # 駐車場 1 件のカード
+│   ├── ParkingFilterBar.tsx # 絞り込み
+│   ├── PlaceSearch.tsx      # 目的地・出発地の検索
+│   └── RouteSummary.tsx     # ルート確認と Google マップへの引き渡し
+├── hooks/
+│   ├── useCurrentLocation.ts
+│   └── useDebounced.ts
+├── lib/
+│   ├── geo.ts         # 距離・徒歩時間
+│   ├── googleMaps.ts  # Google Maps URL の組み立て
+│   └── score.ts       # レコメンドのスコアリング
+├── App.tsx
+└── types.ts
+```
+
+## 制約
+
+- 駐車場データは OpenStreetMap の登録内容に依存します。地方や新設の駐車場では登録が薄いことがあります。
+- **満空情報には対応していません。** スコアの「収容台数」はあくまで満車リスクの代理指標です。
+  リアルタイムの空き状況が要る場合は、それを持つ商用 API（Google Places、各運営事業者の API）を繋ぐ必要があります。
+- 距離は直線距離に 1.3 倍の迂回係数をかけた概算です（分速 80m で徒歩時間に換算）。実際の道路距離ではありません。
