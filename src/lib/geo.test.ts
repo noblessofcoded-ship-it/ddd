@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boundsOf, distanceMeters, formatDistance, walkMinutes } from './geo';
+import { boundsOf, compassDirection, distanceMeters, formatDistance, walkMinutes } from './geo';
 
 describe('distanceMeters', () => {
   it('同じ地点なら 0', () => {
@@ -60,3 +60,25 @@ describe('boundsOf', () => {
     expect(boundsOf([])).toBeNull();
   });
 });
+
+describe('compassDirection', () => {
+  const origin = { lat: 34.669, lng: 135.502 };
+
+  it('東西南北を返す', () => {
+    expect(compassDirection(origin, { lat: 34.679, lng: 135.502 })).toBe('北');
+    expect(compassDirection(origin, { lat: 34.659, lng: 135.502 })).toBe('南');
+    expect(compassDirection(origin, { lat: 34.669, lng: 135.512 })).toBe('東');
+    expect(compassDirection(origin, { lat: 34.669, lng: 135.492 })).toBe('西');
+  });
+
+  it('斜めは 8 方位に丸める', () => {
+    expect(compassDirection(origin, { lat: 34.679, lng: 135.512 })).toBe('北東');
+    expect(compassDirection(origin, { lat: 34.659, lng: 135.492 })).toBe('南西');
+  });
+
+  it('同じ地点でも文字列を返す（表示が壊れないこと）', () => {
+    expect(COMPASS_VALUES).toContain(compassDirection(origin, origin));
+  });
+});
+
+const COMPASS_VALUES = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];

@@ -526,6 +526,13 @@ body {
   font-size: 12px;
   color: var(--muted);
 }
+/* 住所や運営者。名前を補う情報なので一段小さく */
+.card__meta--sub {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .rank {
   flex: 0 0 auto;
   width: 24px;

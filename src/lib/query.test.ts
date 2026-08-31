@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildQueryVariants, isRelevant, matchScore, normalizeQuery, tokenize } from './query';
+import {
+  buildQueryVariants,
+  compactQuery,
+  isRelevant,
+  matchScore,
+  normalizeQuery,
+  tokenize,
+} from './query';
 
 describe('normalizeQuery', () => {
   it('全角空白を半角空白にする', () => {
@@ -35,16 +42,17 @@ describe('tokenize', () => {
 });
 
 describe('buildQueryVariants', () => {
-  it('全語 → 長い語の順に緩めていく', () => {
+  it('全語 → 空白を詰めた形 → 長い語の順に緩めていく', () => {
     expect(buildQueryVariants('台湾鍋　民生炒飯')).toEqual([
       '台湾鍋 民生炒飯',
+      '台湾鍋民生炒飯',
       '民生炒飯',
       '台湾鍋',
     ]);
   });
 
   it('同じ長さなら元の並び順を保つ', () => {
-    expect(buildQueryVariants('渋谷 新宿')).toEqual(['渋谷 新宿', '渋谷', '新宿']);
+    expect(buildQueryVariants('渋谷 新宿')).toEqual(['渋谷 新宿', '渋谷新宿', '渋谷', '新宿']);
   });
 
   it('1 語ならそのまま 1 件', () => {
@@ -52,7 +60,7 @@ describe('buildQueryVariants', () => {
   });
 
   it('重複する語は 1 回だけにする', () => {
-    expect(buildQueryVariants('銀座 銀座')).toEqual(['銀座 銀座', '銀座']);
+    expect(buildQueryVariants('銀座 銀座')).toEqual(['銀座 銀座', '銀座銀座', '銀座']);
   });
 
   it('空クエリは空配列', () => {
@@ -95,5 +103,46 @@ describe('isRelevant', () => {
   it('1 語でも含まれていれば当たり', () => {
     expect(isRelevant('おくまん蒲生四丁目店', ['台湾鍋', 'おくまん'])).toBe(true);
     expect(isRelevant('無関係な場所', ['台湾鍋', 'おくまん'])).toBe(false);
+  });
+});
+
+describe('compactQuery', () => {
+  it('空白を詰める', () => {
+    expect(compactQuery('肉の天満屋　神楽亭')).toBe('肉の天満屋神楽亭');
+    expect(compactQuery('台湾鍋 民生炒飯')).toBe('台湾鍋民生炒飯');
+  });
+
+  it('1 語ならそのまま', () => {
+    expect(compactQuery('神楽亭')).toBe('神楽亭');
+  });
+
+  it('空なら空', () => {
+    expect(compactQuery('  ')).toBe('');
+  });
+});
+
+describe('buildQueryVariants — 空白入りの店名', () => {
+  it('空白を詰めた形を、語を落とす前に試す', () => {
+    // 地図データが「肉の天満屋神楽亭」と 1 語で持っている場合に効く
+    expect(buildQueryVariants('肉の天満屋　神楽亭')).toEqual([
+      '肉の天満屋 神楽亭',
+      '肉の天満屋神楽亭',
+      '肉の天満屋',
+      '神楽亭',
+    ]);
+  });
+
+  it('先頭は今までどおり入力そのまま（既存の当たりを崩さない）', () => {
+    expect(buildQueryVariants('台湾鍋　民生炒飯')[0]).toBe('台湾鍋 民生炒飯');
+  });
+
+  it('語ごとの候補も従来どおり残す', () => {
+    const variants = buildQueryVariants('台湾鍋　民生炒飯');
+    expect(variants).toContain('民生炒飯');
+    expect(variants).toContain('台湾鍋');
+  });
+
+  it('1 語なら候補は増やさない', () => {
+    expect(buildQueryVariants('神楽亭')).toEqual(['神楽亭']);
   });
 });

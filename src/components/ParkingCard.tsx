@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { formatDuration, formatJpy } from '../lib/fee';
-import { formatDistance } from '../lib/geo';
+import { compassDirection, formatDistance } from '../lib/geo';
 import { buildPlaceUrl } from '../lib/googleMaps';
 import { buildFeeSearchUrl } from '../lib/webSearch';
 import type { RankedParking } from '../types';
@@ -16,6 +16,8 @@ type Props = {
   onSaveFee: (charge: string) => void;
   /** 検索語に足す地名。目的地の住所を渡す */
   areaHint?: string | null;
+  /** 目的地の座標。駐車場がどちら側にあるかを出すのに使う */
+  destination?: { lat: number; lng: number } | null;
 };
 
 /** 料金欄の表示。概算が出せるなら金額を、無理なら区分を出す */
@@ -35,6 +37,7 @@ export function ParkingCard({
   onSelect,
   onSaveFee,
   areaHint,
+  destination,
 }: Props) {
   const showsEstimate = lot.fee !== 'free' && lot.estimatedFeeJpy !== null;
   const [editing, setEditing] = useState(false);
@@ -56,9 +59,14 @@ export function ParkingCard({
             <strong>{lot.name}</strong>
             <span className="card__meta">
               徒歩{lot.walkMinutes}分・{formatDistance(lot.distanceM)}
+              {/* 同名の駐車場が並んだときに、どちら側かで見分けられるようにする */}
+              {destination && lot.distanceM > 20 && `・目的地の${compassDirection(destination, lot)}`}
             </span>
-            {/* 「タイムズ」のような運営者名だけの表示は区別が付かないので住所を添える */}
-            {!lot.named && lot.address && <span className="card__meta">{lot.address}</span>}
+            {/* 「タイムズ」だけではどの店か分からないので、住所と運営者を添える */}
+            {lot.address && <span className="card__meta card__meta--sub">{lot.address}</span>}
+            {lot.operator && !lot.name.includes(lot.operator) && (
+              <span className="card__meta card__meta--sub">運営：{lot.operator}</span>
+            )}
           </div>
           <span className="score" title="おすすめ度">
             {lot.score}

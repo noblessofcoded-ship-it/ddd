@@ -1,5 +1,12 @@
 import { distanceMeters } from '../lib/geo';
-import { buildQueryVariants, isRelevant, matchScore, normalizeQuery, tokenize } from '../lib/query';
+import {
+  buildQueryVariants,
+  compactQuery,
+  isRelevant,
+  matchScore,
+  normalizeQuery,
+  tokenize,
+} from '../lib/query';
 import type { LatLng, Place } from '../types';
 import { searchPlaces as searchNominatim } from './nominatim';
 import { searchPlacesByName } from './overpass';
@@ -62,6 +69,12 @@ const DEDUPE_DISTANCE_M = 60;
 
 /** 各サービスから受け取る件数。多めに取って手元で並べ替える */
 const FETCH_LIMIT = 20;
+
+/**
+ * 手を広げる上限。1 段ごとに各サービスへ 1 回ずつ問い合わせるので、
+ * 際限なく広げると無償で公開されているサーバに負担をかけることになる。
+ */
+const MAX_ATTEMPTS = 4;
 
 /**
  * 検索結果を束ねる。同じ場所が複数サービスから返るので、
@@ -184,12 +197,16 @@ export async function searchPlaces(
    * 2 段目で位置バイアスを外すのが肝。現在地の近さを強く効かせているぶん、
    * 離れた土地の店は上位に出てこない。1 段目で当たらなければ、
    * 全国から素直に探し直す必要がある。
+   *
+   * 3 段目以降は、空白を詰めた形・語を落とした形へと順に広げる。
+   * ここまで来るのは当たりが 1 件も無かった場合だけなので、
+   * 段が増えても普段の呼び出し回数は変わらない。
    */
   const attempts: Array<{ query: string; near: LatLng | null }> = [
     { query: variants[0], near },
     ...(near ? [{ query: variants[0], near: null }] : []),
-    ...(variants.length > 1 ? [{ query: variants[1], near }] : []),
-  ];
+    ...variants.slice(1).map((query) => ({ query, near })),
+  ].slice(0, MAX_ATTEMPTS);
 
   // 実際に何段目まで進んだか。1 段目で当たれば「緩めていない」
   let attemptsRun = 0;
@@ -233,8 +250,11 @@ export async function searchPlaces(
   // 範囲を絞らないと重すぎるので、基準点が分かっているときだけ使える
   if (near && !signal?.aborted && !hasRelevantHit(collected, tokens)) {
     const before = failures.length;
+    // 語だけでなく、空白を詰めた形も渡す。
+    // 「肉の天満屋神楽亭」と 1 語で登録されている場合に丸ごと一致させるため
+    const nameTerms = [...new Set([compactQuery(rawQuery), ...tokens])];
     const byName = await settled(
-      searchPlacesByName(tokens, near, { signal }),
+      searchPlacesByName(nameTerms, near, { signal }),
       '地図データの名称検索',
       markFailed,
     );

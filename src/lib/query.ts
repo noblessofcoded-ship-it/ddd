@@ -17,12 +17,24 @@ export function tokenize(raw: string): string[] {
 }
 
 /**
- * 検索を段階的に緩めるための候補列を作る。
- * 例: 「台湾鍋 民生炒飯」→ ["台湾鍋 民生炒飯", "民生炒飯", "台湾鍋"]
+ * 空白を詰めた形。
  *
- * 店名は「ジャンル + 屋号」の形で書かれることが多く、OSM には屋号だけが
- * 登録されているケースがある。全語 AND で空振りしたときに語を落として
- * 再検索できるよう、長い語（＝固有名詞である可能性が高い）から順に並べる。
+ * 「肉の天満屋 神楽亭」を、地図データが「肉の天満屋神楽亭」と 1 語で
+ * 持っていることがある。検索サービスは語の単位で一致を見るため、
+ * 空白の有無が食い違うと当たらない。両方を試せるようにする。
+ */
+export function compactQuery(raw: string): string {
+  return tokenize(raw).join('');
+}
+
+/**
+ * 検索を段階的に緩めるための候補列を作る。
+ * 例: 「台湾鍋 民生炒飯」→ ["台湾鍋 民生炒飯", "台湾鍋民生炒飯", "民生炒飯", "台湾鍋"]
+ *
+ * 店名は「屋号 + 店名」の形で書かれることが多く、地図データには片方だけが
+ * 登録されているケースがある。全語で空振りしたときに、空白を詰めた形、
+ * 続いて語を落とした形へと順に手を広げられるようにする。
+ * 語は長い方（＝固有名詞である可能性が高い）から並べる。
  */
 export function buildQueryVariants(raw: string): string[] {
   const tokens = tokenize(raw);
@@ -31,10 +43,12 @@ export function buildQueryVariants(raw: string): string[] {
   const full = tokens.join(' ');
   if (tokens.length === 1) return [full];
 
-  const byLengthDesc = [...tokens].sort((a, b) => b.length - a.length || tokens.indexOf(a) - tokens.indexOf(b));
+  const byLengthDesc = [...tokens].sort(
+    (a, b) => b.length - a.length || tokens.indexOf(a) - tokens.indexOf(b),
+  );
 
-  // 全語 → 長い語だけ → 次に長い語… の順。重複は落とす
-  return [...new Set([full, ...byLengthDesc])];
+  // 全語 → 空白を詰めた形 → 長い語だけ → 次に長い語… の順。重複は落とす
+  return [...new Set([full, compactQuery(raw), ...byLengthDesc])];
 }
 
 /** 比較用に揃える。表記ゆれと空白を潰して部分一致を取りやすくする */

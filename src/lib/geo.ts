@@ -41,3 +41,26 @@ export function boundsOf(points: LatLng[]): [[number, number], [number, number]]
     [Math.max(...lats), Math.max(...lngs)],
   ];
 }
+
+const COMPASS = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'] as const;
+
+/**
+ * from から見た to の方角を 8 方位で返す。
+ *
+ * 「タイムズ」のように名前が同じ駐車場が並ぶと区別が付かないので、
+ * 目的地から見てどちら側かを添えて見分けられるようにする。
+ */
+export function compassDirection(from: LatLng, to: LatLng): string {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLng = toRad(to.lng - from.lng);
+  const lat1 = toRad(from.lat);
+  const lat2 = toRad(to.lat);
+
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  const bearing = (Math.atan2(y, x) * 180) / Math.PI;
+
+  // -180〜180 を 0〜360 に直し、45 度ごとに区切る
+  const index = Math.round((((bearing % 360) + 360) % 360) / 45) % 8;
+  return COMPASS[index];
+}
