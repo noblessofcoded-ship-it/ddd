@@ -206,6 +206,31 @@ body {
   line-height: 1.6;
   color: #78350f;
 }
+/* 何を試したかを見せる。見つからない理由を推測させないため */
+.tried {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: #92400e;
+}
+.tried li::before {
+  content: '✓ ';
+}
+.tried--skipped {
+  color: var(--muted);
+}
+.tried .tried--skipped::before {
+  content: '– ';
+}
+.notfound__wide {
+  flex: 1 0 100%;
+  font-size: 14px;
+  padding: 11px;
+}
 .notfound__actions {
   display: flex;
   gap: 8px;

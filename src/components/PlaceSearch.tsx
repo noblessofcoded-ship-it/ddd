@@ -25,10 +25,17 @@ type SearchState = {
   places: Place[];
   triedQueries: string[];
   relaxed: boolean;
+  usedNameSearch: boolean;
   searched: boolean;
 };
 
-const EMPTY: SearchState = { places: [], triedQueries: [], relaxed: false, searched: false };
+const EMPTY: SearchState = {
+  places: [],
+  triedQueries: [],
+  relaxed: false,
+  usedNameSearch: false,
+  searched: false,
+};
 
 /** 検索を始める最短の文字数。1 文字だと候補が多すぎて役に立たない */
 const MIN_QUERY_LENGTH = 2;
@@ -165,10 +172,24 @@ export function PlaceSearch({
       {state.searched && !loading && state.places.length === 0 && !error && (
         <div className="notfound">
           <p className="notfound__title">見つかりませんでした</p>
+
+          <ul className="tried">
+            {state.triedQueries.map((tried) => (
+              <li key={tried}>「{tried}」で検索</li>
+            ))}
+            <li className={state.usedNameSearch ? '' : 'tried--skipped'}>
+              {state.usedNameSearch
+                ? '地図データの名称を部分一致で検索'
+                : '地図データの名称を部分一致で検索（現在地が必要なため未実行）'}
+            </li>
+          </ul>
+
           <p className="notfound__body">
-            この地図データ（OpenStreetMap）に登録されていない店舗の可能性があります。
-            店名を短くするか、近くの目印になる建物や交差点で探してみてください。
+            {state.usedNameSearch
+              ? 'この地図データ（OpenStreetMap）に登録されていない可能性があります。店名の一部だけで探すか、近くの目印になる建物や交差点で探してみてください。'
+              : '正式名称の一部だけで探す場合は、現在地の指定が要ります。「肉の天満屋 神楽亭」を「神楽亭」で引くような検索は、下のボタンを押すと試せます。'}
           </p>
+
           {fallback?.(normalizeQuery(query))}
         </div>
       )}
