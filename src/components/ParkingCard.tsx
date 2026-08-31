@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { formatDuration, formatJpy } from '../lib/fee';
 import { formatDistance } from '../lib/geo';
 import { buildPlaceUrl } from '../lib/googleMaps';
+import { buildFeeSearchUrl } from '../lib/webSearch';
 import type { RankedParking } from '../types';
 
 type Props = {
@@ -13,6 +14,8 @@ type Props = {
   onSelect: () => void;
   /** 自分で調べた料金を登録する。空文字なら取り消し */
   onSaveFee: (charge: string) => void;
+  /** 検索語に足す地名。目的地の住所を渡す */
+  areaHint?: string | null;
 };
 
 /** 料金欄の表示。概算が出せるなら金額を、無理なら区分を出す */
@@ -24,7 +27,15 @@ function feeLabel(lot: RankedParking): string {
   return lot.fee === 'paid' ? '有料・料金は未登録' : '料金は未登録';
 }
 
-export function ParkingCard({ lot, rank, selected, stayMinutes, onSelect, onSaveFee }: Props) {
+export function ParkingCard({
+  lot,
+  rank,
+  selected,
+  stayMinutes,
+  onSelect,
+  onSaveFee,
+  areaHint,
+}: Props) {
   const showsEstimate = lot.fee !== 'free' && lot.estimatedFeeJpy !== null;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(lot.feeSource === 'user' ? (lot.feeNote ?? '') : '');
@@ -99,12 +110,13 @@ export function ParkingCard({ lot, rank, selected, stayMinutes, onSelect, onSave
 
       <a
         className="card__link"
-        href={buildPlaceUrl(lot, lot.name)}
+        // 名前が無いものは既定の文言で検索されてしまうので、座標で開く
+        href={buildPlaceUrl(lot, lot.named ? lot.name : undefined)}
         target="_blank"
         rel="noreferrer noopener"
         title="Google マップでこの駐車場を開く"
       >
-        {lot.estimatedFeeJpy === null && lot.fee !== 'free' ? '料金を\n確認' : '詳細'}
+        地図
       </a>
       </div>
 
@@ -132,9 +144,23 @@ export function ParkingCard({ lot, rank, selected, stayMinutes, onSelect, onSave
           </div>
         </form>
       ) : (
-        <button type="button" className="feeform__open" onClick={() => setEditing(true)}>
-          {lot.feeSource === 'user' ? '登録した料金を直す' : '調べた料金を登録する'}
-        </button>
+        <div className="feeactions">
+          <a
+            className="feeactions__item"
+            href={buildFeeSearchUrl(lot, areaHint)}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            🔍 料金を調べる
+          </a>
+          <button
+            type="button"
+            className="feeactions__item"
+            onClick={() => setEditing(true)}
+          >
+            ✏️ {lot.feeSource === 'user' ? '料金を直す' : '料金を登録'}
+          </button>
+        </div>
       )}
     </li>
   );
