@@ -34,6 +34,9 @@ export default function App() {
   const [pickingOnMap, setPickingOnMap] = useState(false);
   const currentLocation = useCurrentLocation();
 
+  // 検索の基準点。出発地を決めていなくても、端末の現在地が取れていれば使う
+  const searchOrigin = origin ?? currentLocation.place;
+
   /** 地図をタップして目的地を決める。地名は分かれば添える */
   const handlePick = useCallback(async (point: LatLng) => {
     setPickingOnMap(false);
@@ -141,7 +144,22 @@ export default function App() {
             selected={destination}
             onSelect={setDestination}
             onClear={handleReset}
-            near={origin}
+            near={searchOrigin}
+            locationPrompt={
+              searchOrigin ? null : (
+                <p className="hint">
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={currentLocation.request}
+                    disabled={currentLocation.loading}
+                  >
+                    {currentLocation.loading ? '取得中…' : '現在地を使う'}
+                  </button>
+                  近くの店を優先して探せます
+                </p>
+              )
+            }
             fallback={(query) => (
               <div className="notfound__actions">
                 <button
@@ -153,7 +171,7 @@ export default function App() {
                 </button>
                 <a
                   className="btn btn--ghost"
-                  href={buildPlaceUrl(origin ?? { lat: 35.681236, lng: 139.767125 }, query)}
+                  href={buildPlaceUrl(searchOrigin ?? { lat: 35.681236, lng: 139.767125 }, query)}
                   target="_blank"
                   rel="noreferrer noopener"
                 >
@@ -167,7 +185,7 @@ export default function App() {
             label="出発地（任意）"
             placeholder="未入力なら Google マップの現在地"
             selected={origin}
-            near={origin}
+            near={searchOrigin}
             onSelect={setOrigin}
             onClear={() => {
               setOrigin(null);

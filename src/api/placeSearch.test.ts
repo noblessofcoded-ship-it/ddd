@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mergePlaces, searchPlaces, sortByDistance } from './placeSearch';
+import { mergePlaces, rankPlaces, searchPlaces } from './placeSearch';
 import type { Place } from '../types';
 
 const OSAKA = { lat: 34.6816, lng: 135.5062 };
@@ -31,16 +31,24 @@ describe('mergePlaces', () => {
   });
 });
 
-describe('sortByDistance', () => {
-  it('基準点に近い順に並べ替える', () => {
-    const far = place({ id: 'far', name: '遠い', lat: 35.6812, lng: 139.7671 });
-    const near = place({ id: 'near', name: '近い' });
-    expect(sortByDistance([far, near], OSAKA).map((p) => p.id)).toEqual(['near', 'far']);
+describe('rankPlaces', () => {
+  it('名前が合うものを、合わないものより上にする', () => {
+    const unrelated = place({ id: 'near-unrelated', name: 'すぐ近くの無関係な店' });
+    const hit = place({ id: 'far-hit', name: 'おくまん京橋西店', lat: 34.70, lng: 135.53 });
+    const ranked = rankPlaces([unrelated, hit], ['おくまん'], OSAKA);
+    expect(ranked.map((p) => p.id)).toEqual(['far-hit', 'near-unrelated']);
   });
 
-  it('基準点が無ければ順序を変えない', () => {
-    const list = [place({ id: 'a' }), place({ id: 'b', name: 'B' })];
-    expect(sortByDistance(list, null)).toEqual(list);
+  it('名前の一致度が同じなら近い順にする', () => {
+    const far = place({ id: 'far', name: 'おくまん蒲生四丁目店', lat: 34.72, lng: 135.56 });
+    const near = place({ id: 'near', name: 'おくまん京橋西店' });
+    expect(rankPlaces([far, near], ['おくまん'], OSAKA).map((p) => p.id)).toEqual(['near', 'far']);
+  });
+
+  it('基準点が無ければ一致度だけで並べる', () => {
+    const hit = place({ id: 'hit', name: 'おくまん本店' });
+    const miss = place({ id: 'miss', name: '別の店' });
+    expect(rankPlaces([miss, hit], ['おくまん'], null).map((p) => p.id)).toEqual(['hit', 'miss']);
   });
 });
 
@@ -103,7 +111,8 @@ describe('searchPlaces', () => {
     });
 
     const result = await searchPlaces('民生炒飯', { near: OSAKA });
-    expect(result.places.map((p) => p.name)).toEqual(['民生炒飯', '別の中華料理店']);
+    // 名前が合う「民生炒飯」だけを残し、無関係な結果は雑音として落とす
+    expect(result.places.map((p) => p.name)).toEqual(['民生炒飯']);
     expect(result.relaxed).toBe(false);
   });
 
@@ -126,7 +135,7 @@ describe('searchPlaces', () => {
 
     const result = await searchPlaces('台湾鍋　民生炒飯', { near: OSAKA });
     expect(result.places.map((p) => p.name)).toEqual(['民生炒飯']);
-    expect(result.matchedQuery).toBe('民生炒飯');
+    expect(result.triedQueries).toEqual(['台湾鍋 民生炒飯', '民生炒飯']);
     expect(result.relaxed).toBe(true);
     expect(calls.filter((c) => c.includes('photon'))).toHaveLength(2);
   });
@@ -202,5 +211,71 @@ describe('searchPlaces', () => {
     const result = await searchPlaces('　 ');
     expect(result.places).toEqual([]);
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('searchPlaces — 当たり外れの判定', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('結果はあるが名前が合っていなければ、語を落として引き直す', async () => {
+    // タイポ許容のジオコーダは「0 件」ではなく無関係な結果を返してくる。
+    // 件数だけを見ていると、この状況で緩和検索が動かない
+    const calls = stubFetch((url) => {
+      if (!url.includes('photon')) return [];
+      return url.includes('%E5%8F%B0%E6%B9%BE%E9%8D%8B+')
+        ? photonResponse(['まったく無関係なラーメン店'])
+        : photonResponse(['民生炒飯']);
+    });
+
+    const result = await searchPlaces('台湾鍋　民生炒飯', { near: OSAKA });
+    expect(calls.filter((c) => c.includes('photon'))).toHaveLength(2);
+    expect(result.places.map((p) => p.name)).toEqual(['民生炒飯']);
+  });
+
+  it('結果はあるが名前が合っていなければ、Overpass の名称検索まで進む', async () => {
+    const calls = stubFetch((url) => {
+      if (url.includes('interpreter')) return overpassResponse(['おくまん蒲生四丁目店', 'おくまん京橋西店']);
+      if (url.includes('photon')) return photonResponse(['無関係な喫茶店']);
+      return [];
+    });
+
+    const result = await searchPlaces('おくまん', { near: OSAKA });
+    expect(calls.some((c) => c.startsWith('overpass:'))).toBe(true);
+    expect(result.places.map((p) => p.name)).toEqual(['おくまん蒲生四丁目店', 'おくまん京橋西店']);
+    expect(result.relaxed).toBe(true);
+  });
+
+  it('名前が合う結果があれば、それ以上は引かない', async () => {
+    const calls = stubFetch((url) =>
+      url.includes('photon') ? photonResponse(['おくまん京橋西店']) : [],
+    );
+
+    const result = await searchPlaces('おくまん', { near: OSAKA });
+    expect(calls.filter((c) => c.includes('photon'))).toHaveLength(1);
+    expect(calls.some((c) => c.startsWith('overpass:'))).toBe(false);
+    expect(result.relaxed).toBe(false);
+  });
+
+  it('チェーン店の支店を取りこぼさず、近い順に並べる', async () => {
+    stubFetch((url) => {
+      if (url.includes('photon')) return photonResponse(['おくまん京橋西店', '無関係な店', 'おくまん蒲生四丁目店']);
+      return [];
+    });
+
+    // photonResponse は index が大きいほど基準点に近い座標を返す。
+    // 一致度が同じなので、間に挟まった無関係な店を落としたうえで近い順になる
+    const result = await searchPlaces('おくまん', { near: OSAKA });
+    expect(result.places.map((p) => p.name)).toEqual(['おくまん蒲生四丁目店', 'おくまん京橋西店']);
+  });
+
+  it('どこにも名前の合うものが無ければ、集まった結果をそのまま出す', async () => {
+    stubFetch((url) => {
+      if (url.includes('interpreter')) return { elements: [] };
+      return url.includes('photon') ? photonResponse(['似ているかもしれない店']) : [];
+    });
+
+    const result = await searchPlaces('存在しない店', { near: OSAKA });
+    expect(result.places.map((p) => p.name)).toEqual(['似ているかもしれない店']);
   });
 });

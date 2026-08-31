@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { searchPlaces } from '../api/placeSearch';
 import { distanceMeters, formatDistance } from '../lib/geo';
+import { useDebounced } from '../hooks/useDebounced';
 import { normalizeQuery } from '../lib/query';
 import type { LatLng, Place } from '../types';
 
@@ -16,16 +17,21 @@ type Props = {
   action?: React.ReactNode;
   /** 見つからなかったときに出す代替手段。検索した語を受け取る */
   fallback?: (query: string) => React.ReactNode;
+  /** 現在地が未設定のときに出す案内 */
+  locationPrompt?: React.ReactNode;
 };
 
 type SearchState = {
   places: Place[];
-  matchedQuery: string;
+  triedQueries: string[];
   relaxed: boolean;
   searched: boolean;
 };
 
-const EMPTY: SearchState = { places: [], matchedQuery: '', relaxed: false, searched: false };
+const EMPTY: SearchState = { places: [], triedQueries: [], relaxed: false, searched: false };
+
+/** 検索を始める最短の文字数。1 文字だと候補が多すぎて役に立たない */
+const MIN_QUERY_LENGTH = 2;
 
 export function PlaceSearch({
   label,
@@ -36,38 +42,43 @@ export function PlaceSearch({
   near = null,
   action,
   fallback,
+  locationPrompt,
 }: Props) {
   const [query, setQuery] = useState('');
   const [state, setState] = useState<SearchState>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const requestRef = useRef<AbortController | null>(null);
+  const debouncedQuery = useDebounced(query, 450);
 
-  const canSearch = normalizeQuery(query).length >= 1;
+  // 入力が落ち着いたら自動で検索する
+  useEffect(() => {
+    if (selected || normalizeQuery(debouncedQuery).length < MIN_QUERY_LENGTH) {
+      setState(EMPTY);
+      setLoading(false);
+      return;
+    }
 
-  const runSearch = async () => {
-    if (!canSearch || loading) return;
-
-    requestRef.current?.abort();
     const controller = new AbortController();
-    requestRef.current = controller;
-
     setLoading(true);
     setError(null);
 
-    try {
-      const result = await searchPlaces(query, { signal: controller.signal, near });
-      if (controller.signal.aborted) return;
-      setState({ ...result, searched: true });
-    } catch (cause) {
-      if (controller.signal.aborted) return;
-      setError(cause instanceof Error ? cause.message : '検索に失敗しました');
-      setState(EMPTY);
-    } finally {
-      if (!controller.signal.aborted) setLoading(false);
-    }
-  };
+    searchPlaces(debouncedQuery, { signal: controller.signal, near })
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        setState({ ...result, searched: true });
+      })
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        setError(cause instanceof Error ? cause.message : '検索に失敗しました');
+        setState(EMPTY);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [debouncedQuery, selected, near]);
 
   const handleSelect = (place: Place) => {
     onSelect(place);
@@ -104,42 +115,30 @@ export function PlaceSearch({
     <div className="field">
       <span className="field__label">{label}</span>
 
-      <form
-        className="field__row"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void runSearch();
-        }}
-      >
+      <div className="field__row">
         <input
           ref={inputRef}
           type="search"
           className="input"
           value={query}
           placeholder={placeholder}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setState(EMPTY);
-          }}
+          onChange={(event) => setQuery(event.target.value)}
           autoComplete="off"
-          enterKeyHint="search"
         />
         {action}
-        <button type="submit" className="btn btn--search" disabled={!canSearch || loading}>
-          {loading ? '検索中' : '検索'}
-        </button>
-      </form>
+      </div>
 
-      {near && !state.searched && <p className="hint">現在地に近い順で探します</p>}
+      {loading && <p className="hint">検索中…</p>}
       {error && <p className="hint hint--error">{error}</p>}
+      {locationPrompt}
 
-      {state.relaxed && (
+      {state.relaxed && state.places.length > 0 && (
         <p className="hint">
-          入力どおりでは見つからず、「{state.matchedQuery}」で検索した結果です
+          入力どおりでは見つからなかったため、条件を緩めて探しました
         </p>
       )}
 
-      {state.searched && state.places.length > 0 && (
+      {!loading && state.places.length > 0 && (
         <ul className="results">
           {state.places.map((place) => (
             <li key={place.id}>
@@ -162,7 +161,7 @@ export function PlaceSearch({
             この地図データ（OpenStreetMap）に登録されていない店舗の可能性があります。
             店名を短くするか、近くの目印になる建物や交差点で探してみてください。
           </p>
-          {fallback?.(state.matchedQuery)}
+          {fallback?.(normalizeQuery(query))}
         </div>
       )}
     </div>
