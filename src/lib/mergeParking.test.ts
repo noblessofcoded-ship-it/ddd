@@ -7,6 +7,7 @@ function lot(overrides: Partial<ParkingLot> = {}): ParkingLot {
   return {
     id: 'node/1',
     source: 'osm',
+    enrichedBy: null,
     name: 'タイムズ',
     named: false,
     address: null,
@@ -154,5 +155,46 @@ describe('mergeParking — 名前が手がかりにならない駐車場', () =>
     // OSM は区画の中心、Yahoo! は出入口付近を指していることがある
     const far = yahooLot({ lat: 34.7055 + 0.00045 });
     expect(mergeParking([lot()], [far]).lots).toHaveLength(1);
+  });
+});
+
+describe('namesLookSame — 屋号の表記ゆれ', () => {
+  it('屋号末尾の数字を無視する', () => {
+    // 「タイムズ24」は法人名で、個々の駐車場名には現れない
+    expect(namesLookSame('タイムズ24', 'タイムズ天満橋筋')).toBe(true);
+    expect(namesLookSame('リパーク123', 'リパーク天満')).toBe(true);
+  });
+
+  it('無関係な名前は数字を外しても別物のまま', () => {
+    expect(namesLookSame('タイムズ24', '三井のリパーク天満')).toBe(false);
+  });
+});
+
+describe('mergeParking — 運営者名での突き合わせ', () => {
+  it('名前が運営者名でも、Yahoo! の固有名に置き換える', () => {
+    const osm = lot({ name: 'タイムズ24', named: true, operator: 'タイムズ24' });
+    const { lots } = mergeParking([osm], [yahooLot({ name: 'タイムズ天満橋筋' })]);
+    expect(lots).toHaveLength(1);
+    expect(lots[0].name).toBe('タイムズ天満橋筋');
+    expect(lots[0].capacity).toBe(20);
+  });
+
+  it('名前と運営者が食い違っていても、どちらかで一致すれば突き合わせる', () => {
+    const osm = lot({ name: '第2駐車場', named: true, operator: 'タイムズ' });
+    const { lots } = mergeParking([osm], [yahooLot({ name: 'タイムズ天満橋筋' })]);
+    expect(lots).toHaveLength(1);
+    // 固有名がある側は残す
+    expect(lots[0].name).toBe('第2駐車場');
+    expect(lots[0].address).toBe('大阪府大阪市北区天満2-5');
+  });
+
+  it('補ったことを記録する', () => {
+    const { lots } = mergeParking([lot()], [yahooLot()]);
+    expect(lots[0].enrichedBy).toBe('yahoo');
+  });
+
+  it('突き合わなかった駐車場には印を付けない', () => {
+    const { lots } = mergeParking([lot()], []);
+    expect(lots[0].enrichedBy).toBeNull();
   });
 });

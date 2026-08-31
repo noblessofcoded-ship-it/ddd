@@ -178,6 +178,7 @@ export function parseParkingElement(
   return {
     id: `${element.type}/${element.id}`,
     source: 'osm',
+    enrichedBy: null,
     name: parseName(tags, kind),
     named: properName(tags) !== null,
     address: parseAddress(tags),

@@ -27,6 +27,7 @@ function lot(overrides: Partial<ParkingLot> = {}): ParkingLot {
     id: 'node/1',
     name: 'テスト駐車場',
     source: 'osm',
+    enrichedBy: null,
     named: true,
     address: null,
     access: 'public',

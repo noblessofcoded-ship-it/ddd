@@ -113,6 +113,11 @@ export function ParkingCard({
           </strong>
           {showsEstimate && <span className="fee__note">{formatDuration(stayMinutes)}の目安</span>}
           {lot.feeSource === 'user' && <span className="badge">自分で登録</span>}
+          {(lot.source === 'yahoo' || lot.enrichedBy === 'yahoo') && (
+            <span className="badge badge--yahoo" title="Yahoo! ローカルサーチの情報で名前や住所を補いました">
+              Yahoo!
+            </span>
+          )}
         </div>
 
         <div className="limits">
