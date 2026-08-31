@@ -50,18 +50,10 @@ export function RouteSummary({ origin, destination, parking, stayMinutes }: Prop
           type="button"
           className="btn btn--primary btn--block"
           onClick={() =>
-            open(
-              buildDirectionsUrl({
-                origin,
-                destination,
-                parking: null,
-                mode: 'direct',
-                navigate: true,
-              }),
-            )
+            open(buildDirectionsUrl({ origin, destination, parking: null, mode: 'direct' }))
           }
         >
-          Google マップでナビを開始
+          Google マップで経路を見る
         </button>
       </section>
     );
@@ -95,44 +87,36 @@ export function RouteSummary({ origin, destination, parking, stayMinutes }: Prop
         </li>
       </ol>
 
-      <button
-        type="button"
-        className="btn btn--primary btn--block"
-        onClick={() =>
-          open(
-            buildDirectionsUrl({
-              origin,
-              destination,
-              parking,
-              mode: 'to-parking',
-              navigate: true,
-            }),
-          )
-        }
-      >
-        駐車場までナビを開始
-      </button>
-
-      <div className="summary__secondary">
+      <div className="steps">
         <button
           type="button"
-          className="btn btn--ghost"
-          onClick={() => open(buildWalkUrl(parking, destination))}
-        >
-          🚶 駐車場からの徒歩ルート
-        </button>
-        <button
-          type="button"
-          className="btn btn--ghost"
+          className="btn btn--primary btn--block"
           onClick={() =>
-            open(
-              buildDirectionsUrl({ origin, destination, parking, mode: 'via-parking' }),
-            )
+            open(buildDirectionsUrl({ origin, destination, parking, mode: 'to-parking' }))
           }
         >
-          🗺 駐車場を経由地にして開く
+          ① 🚗 駐車場までの経路を見る
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary btn--outline btn--block"
+          onClick={() => open(buildWalkUrl(parking, destination))}
+        >
+          ② 🚶 駐車場から目的地までの経路を見る
         </button>
       </div>
+
+      <p className="steps__note">
+        Google マップは 1 つの経路に車と徒歩を混ぜられないため、2 つに分けています。
+      </p>
+
+      <button
+        type="button"
+        className="btn btn--ghost btn--block"
+        onClick={() => open(buildDirectionsUrl({ origin, destination, parking, mode: 'via-parking' }))}
+      >
+        🗺 駐車場を経由地にして目的地まで（すべて車）
+      </button>
     </section>
   );
 }

@@ -13,7 +13,11 @@ export type HandoffInput = {
   /** 駐車場を使わないなら null */
   parking: LatLng | null;
   mode: HandoffMode;
-  /** true なら Google Maps を開いた直後にナビを開始する */
+  /**
+   * true なら Google マップを開いた直後にナビを開始する。
+   * 既定は false。いきなり案内が始まるとルートを確認できないため、
+   * 経路の表示画面で止める。
+   */
   navigate?: boolean;
 };
 

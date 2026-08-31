@@ -23,15 +23,18 @@ export type FeeEstimate = {
 export const EMPTY_FEE: ParsedFee = { rate: null, maxJpy: null };
 
 /** 金額の表記ゆれ。¥ / ￥ / 円 / JPY に対応し、3桁区切りのカンマを許す */
-const AMOUNT = String.raw`[¥￥]?\s*([\d,]+)\s*(?:円|JPY|yen)?`;
+const AMOUNT = String.raw`[¥￥]?\s*([\d,]+)\s*(?:円|圓|JPY|yen)?`;
 /** 時間の表記ゆれ。分 / 時間 / min / h に対応 */
-const DURATION = String.raw`(\d+)\s*(分|時間|minutes?|mins?|hours?|min|hr?)`;
+const DURATION = String.raw`(\d+)\s*(分間|分|時間|minutes?|mins?|hours?|min|hr?)`;
 
 function toMinutes(value: number, unit: string): number {
   const normalized = unit.toLowerCase();
   const isHour = normalized === '時間' || normalized.startsWith('h');
   return isHour ? value * 60 : value;
 }
+
+/** 「毎」「ごと」など、単価であることを示す語 */
+const PER_MARKER = String.raw`(?:/|／|per|につき|ごとに?|毎)`;
 
 function toJpy(raw: string): number {
   return Number(raw.replace(/,/g, ''));
@@ -55,9 +58,15 @@ export function parseCharge(raw: string | null | undefined): ParsedFee {
 
 function parseRate(text: string): ParkingRate | null {
   // 「300円/30分」— 金額が先、スラッシュ区切り
-  const perUnit = text.match(new RegExp(`${AMOUNT}\\s*(?:/|／|per|につき)\\s*${DURATION}`, 'i'));
+  const perUnit = text.match(new RegExp(`${AMOUNT}\\s*${PER_MARKER}\\s*${DURATION}`, 'i'));
   if (perUnit) {
     return buildRate(toJpy(perUnit[1]), Number(perUnit[2]), perUnit[3]);
+  }
+
+  // 「30分ごとに200円」「20分毎 100円」— 時間が先で「ごと/毎」を挟む
+  const perFirst = text.match(new RegExp(`${DURATION}\\s*${PER_MARKER}\\s*${AMOUNT}`, 'i'));
+  if (perFirst) {
+    return buildRate(toJpy(perFirst[3]), Number(perFirst[1]), perFirst[2]);
   }
 
   // 「1時間 400円」— 時間が先。最大料金の記述を単価と読み違えないよう除外する

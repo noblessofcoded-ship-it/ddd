@@ -128,3 +128,21 @@ describe('表示フォーマット', () => {
     expect(formatDuration(90)).toBe('1時間30分');
   });
 });
+
+describe('parseCharge — 表記ゆれの追加対応', () => {
+  it('「ごと」「毎」を挟む書式を読む', () => {
+    expect(parseCharge('30分ごとに200円').rate).toEqual({ unitJpy: 200, unitMinutes: 30 });
+    expect(parseCharge('20分毎 100円').rate).toEqual({ unitJpy: 100, unitMinutes: 20 });
+    expect(parseCharge('200円/20分毎').rate).toEqual({ unitJpy: 200, unitMinutes: 20 });
+  });
+
+  it('「分間」表記を読む', () => {
+    expect(parseCharge('60分間 400円').rate).toEqual({ unitJpy: 400, unitMinutes: 60 });
+  });
+
+  it('単価と最大料金が混ざっていても両方読む', () => {
+    const parsed = parseCharge('20分ごとに100円、24時間最大800円');
+    expect(parsed.rate).toEqual({ unitJpy: 100, unitMinutes: 20 });
+    expect(parsed.maxJpy).toBe(800);
+  });
+});

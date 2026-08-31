@@ -122,6 +122,9 @@ export default function App() {
 
   const selectedParking = ranked.find((lot) => lot.id === selectedId) ?? null;
 
+  // 料金が分かっている件数。未登録が多い現実を隠さず伝えるために出す
+  const knownFeeCount = ranked.filter((lot) => lot.estimatedFeeJpy !== null).length;
+
   const handleReset = () => {
     setDestination(null);
     setLots([]);
@@ -281,6 +284,14 @@ export default function App() {
             {searched && !loading && !error && ranked.length === 0 && (
               <p className="hint">
                 条件に合う駐車場が見つかりませんでした。徒歩距離を広げるか、絞り込みを外してみてください。
+              </p>
+            )}
+
+            {ranked.length > 0 && knownFeeCount < ranked.length && (
+              <p className="coverage">
+                料金が分かるのは {ranked.length} 件中 {knownFeeCount} 件です。
+                OpenStreetMap に料金が登録されていない駐車場が多いため、
+                残りは各カードの「料金を確認」から Google マップでご確認ください。
               </p>
             )}
 

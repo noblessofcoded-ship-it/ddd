@@ -29,10 +29,45 @@ const KIND_BY_TAG: Record<string, ParkingKind> = {
   lane: 'street-side',
 };
 
-function parseFee(tags: Record<string, string>): FeeKind {
+/**
+ * 料金が書かれていそうなタグを、書式のゆれを含めて集める。
+ *
+ * OSM の料金は charge に統一されておらず、fee:conditions、条件付き構文
+ * （charge:conditional）、旧来の parking:condition:N:charge などに散っている。
+ * どれか 1 つだけ見ていると「料金不明」になる駐車場がかなり増えるため、
+ * 見つかったものを全部つないで解釈に回す。
+ */
+function collectChargeText(tags: Record<string, string>): string | null {
+  const direct = [
+    tags.charge,
+    tags['charge:conditional'],
+    tags['fee:conditions'],
+    tags['fee:conditional'],
+    tags['parking:fee'],
+    tags['parking:charge'],
+  ];
+
+  // parking:condition:1:charge のような連番タグも拾う
+  const numbered = Object.entries(tags)
+    .filter(([key]) => /^parking:condition:\d+:(charge|fee)$/.test(key))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, value]) => value);
+
+  const parts = [...direct, ...numbered]
+    .filter((part): part is string => Boolean(part && part.trim()))
+    // 金額を含まない条件文（"no @ customers" など）は料金の手がかりにならず、
+    // そのまま画面に出しても読み手の役に立たないので落とす
+    .filter((part) => /\d/.test(part));
+
+  return parts.length > 0 ? [...new Set(parts)].join(' ') : null;
+}
+
+function parseFee(tags: Record<string, string>, chargeText: string | null): FeeKind {
   const fee = tags.fee?.toLowerCase();
-  if (fee === 'yes' || tags.charge || tags['fee:conditions']) return 'paid';
+  if (fee === 'yes' || chargeText) return 'paid';
   if (fee === 'no' || fee === 'free') return 'free';
+  // fee タグが無くても、条件付きで有料と書かれていれば有料とみなす
+  if (/yes/i.test(tags['fee:conditional'] ?? '')) return 'paid';
   return 'unknown';
 }
 
@@ -78,21 +113,20 @@ export function parseParkingElement(
 
   const kind = KIND_BY_TAG[tags.parking ?? ''] ?? 'unknown';
   const distance = distanceMeters(destination, { lat, lng });
-  // charge と fee:conditions の両方に情報が散っていることがあるので繋げて解釈する
-  const feeNote = [tags.charge, tags['fee:conditions']].filter(Boolean).join(' ') || null;
+  const feeNote = collectChargeText(tags);
 
   return {
     id: `${element.type}/${element.id}`,
     name: parseName(tags, kind),
     lat,
     lng,
-    fee: parseFee(tags),
+    fee: parseFee(tags, feeNote),
     feeNote,
     parsedFee: parseCharge(feeNote),
     kind,
     capacity: parseCapacity(tags.capacity),
     openingHours: tags.opening_hours ?? null,
-    maxStayMinutes: parseMaxStay(tags.maxstay),
+    maxStayMinutes: parseMaxStay(tags.maxstay ?? tags['parking:condition:1:maxstay']),
     maxHeightM: parseMaxHeight(tags.maxheight),
     distanceM: Math.round(distance),
     walkMinutes: walkMinutes(distance),

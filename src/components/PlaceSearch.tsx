@@ -49,7 +49,8 @@ export function PlaceSearch({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debouncedQuery = useDebounced(query, 450);
+  // 入力中の反応を良くするため、間隔は短めに取る
+  const debouncedQuery = useDebounced(query, 300);
 
   // 入力が落ち着いたら自動で検索する
   useEffect(() => {
@@ -63,7 +64,14 @@ export function PlaceSearch({
     setLoading(true);
     setError(null);
 
-    searchPlaces(debouncedQuery, { signal: controller.signal, near })
+    searchPlaces(debouncedQuery, {
+      signal: controller.signal,
+      near,
+      // 速い経路の結果を先に描き、時間のかかる再検索の結果は後から差し替える
+      onPartial: (partial) => {
+        if (!controller.signal.aborted) setState({ ...partial, searched: true });
+      },
+    })
       .then((result) => {
         if (controller.signal.aborted) return;
         setState({ ...result, searched: true });
@@ -128,7 +136,7 @@ export function PlaceSearch({
         {action}
       </div>
 
-      {loading && <p className="hint">検索中…</p>}
+      {loading && state.places.length === 0 && <p className="hint">検索中…</p>}
       {error && <p className="hint hint--error">{error}</p>}
       {locationPrompt}
 
@@ -138,8 +146,8 @@ export function PlaceSearch({
         </p>
       )}
 
-      {!loading && state.places.length > 0 && (
-        <ul className="results">
+      {state.places.length > 0 && (
+        <ul className={`results ${loading ? 'results--stale' : ''}`}>
           {state.places.map((place) => (
             <li key={place.id}>
               <button type="button" className="results__item" onClick={() => handleSelect(place)}>
