@@ -70,6 +70,16 @@ const nominatimResponse = (names: string[]) =>
     display_name: `${name}, 中央区, 大阪市, 大阪府, 日本`,
   }));
 
+/** Yahoo! ローカルサーチ形式のレスポンス（JSONP で返る中身） */
+const yahooResponse = (names: string[]) => ({
+  Feature: names.map((name, index) => ({
+    Id: `y${index}`,
+    Name: name,
+    Geometry: { Coordinates: `${135.5019 + index * 0.001},34.6716` },
+    Property: { Uid: `uid-${index}`, Address: `大阪府大阪市中央区${index}` },
+  })),
+});
+
 /** Overpass 形式のレスポンス */
 const overpassResponse = (names: string[]) => ({
   elements: names.map((name, index) => ({
@@ -436,5 +446,72 @@ describe('searchPlaces — 見つからないことを正しく伝える', () =>
 
     const result = await searchPlaces('神楽亭', { near: OSAKA, limit: 12 });
     expect(result.nearMisses.length).toBeLessThanOrEqual(12);
+  });
+});
+
+describe('searchPlaces — Yahoo! ローカルサーチの併用', () => {
+  /** JSONP は script タグで読むので、src を捕まえてコールバックを呼ぶ */
+  function stubJsonp(payloadFor: (url: string) => unknown | null) {
+    const requested: string[] = [];
+    const head = { append: (script: HTMLScriptElement) => {
+      requested.push(script.src);
+      const name = new URL(script.src, 'https://x.test').searchParams.get('callback') as string;
+      const payload = payloadFor(script.src);
+      queueMicrotask(() => {
+        if (payload === null) script.onerror?.(new Event('error'));
+        else (globalThis as Record<string, any>)[name]?.(payload);
+      });
+    } };
+    vi.stubGlobal('document', {
+      createElement: () => ({ src: '', onerror: null, remove() {} }),
+      head,
+    });
+    vi.stubGlobal('window', globalThis);
+    return requested;
+  }
+
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('Client ID があれば Yahoo! も引き、OSM に無い店を拾う', async () => {
+    stubFetch((url) => (url.includes('photon') ? { features: [] } : []));
+    const requested = stubJsonp(() => yahooResponse(['肉の天満屋 神楽亭']));
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA, yahooAppId: 'APPID' });
+
+    expect(requested[0]).toContain('map.yahooapis.jp');
+    expect(requested[0]).toContain('appid=APPID');
+    expect(result.places.map((p) => p.name)).toEqual(['肉の天満屋 神楽亭']);
+  });
+
+  it('Client ID が無ければ Yahoo! は呼ばない', async () => {
+    stubFetch((url) => (url.includes('photon') ? { features: [] } : []));
+    const requested = stubJsonp(() => yahooResponse(['肉の天満屋 神楽亭']));
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA });
+
+    expect(requested).toHaveLength(0);
+    expect(result.places).toEqual([]);
+  });
+
+  it('Yahoo! が落ちても OSM の結果は返す', async () => {
+    stubFetch((url) => (url.includes('photon') ? photonResponse(['神楽亭']) : []));
+    stubJsonp(() => null);
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA, yahooAppId: 'APPID' });
+
+    expect(result.places.map((p) => p.name)).toEqual(['神楽亭']);
+    expect(result.failed).toBe(true);
+  });
+
+  it('同じ店が両方から返っても 1 件にまとめる', async () => {
+    stubFetch((url) => (url.includes('photon') ? photonResponse(['神楽亭']) : []));
+    stubJsonp(() => yahooResponse(['神楽亭']));
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA, yahooAppId: 'APPID' });
+
+    expect(result.places).toHaveLength(1);
+    // 住所などの情報が多い Yahoo! 側を残す
+    expect(result.places[0].id.startsWith('yahoo:')).toBe(true);
   });
 });

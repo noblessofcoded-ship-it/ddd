@@ -13,6 +13,8 @@ type Props = {
   onClear: () => void;
   /** 現在地。指定すると近い順に並べ替え、周辺を優先して検索する */
   near?: LatLng | null;
+  /** Yahoo! ローカルサーチAPI の Client ID。あれば店舗の検索先が増える */
+  yahooAppId?: string | null;
   /** 入力欄の右に置く補助ボタン（現在地取得など） */
   action?: React.ReactNode;
   /** 見つからなかったときに出す代替手段。検索した語を受け取る */
@@ -51,6 +53,7 @@ export function PlaceSearch({
   onSelect,
   onClear,
   near = null,
+  yahooAppId = null,
   action,
   fallback,
   locationPrompt,
@@ -78,6 +81,7 @@ export function PlaceSearch({
     searchPlaces(debouncedQuery, {
       signal: controller.signal,
       near,
+      yahooAppId,
       // 速い経路の結果を先に描き、時間のかかる再検索の結果は後から差し替える
       onPartial: (partial) => {
         if (!controller.signal.aborted) setState({ ...partial, searched: true });
@@ -97,7 +101,7 @@ export function PlaceSearch({
       });
 
     return () => controller.abort();
-  }, [debouncedQuery, selected, near]);
+  }, [debouncedQuery, selected, near, yahooAppId]);
 
   const handleSelect = (place: Place) => {
     onSelect(place);

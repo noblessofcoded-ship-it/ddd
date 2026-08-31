@@ -279,6 +279,50 @@ body {
   font-weight: 700;
 }
 
+/* ---------- Yahoo! の設定 ---------- */
+.yahoo {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.yahoo__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.yahoo__off {
+  font-size: 10px;
+  font-weight: 400;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.yahoo__note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.yahoo__form {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.yahoo__form .input {
+  font-size: 14px;
+  padding: 8px 10px;
+}
+.yahoo__form .btn {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
 /* ---------- toggle ---------- */
 .toggle {
   display: flex;

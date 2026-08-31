@@ -8,7 +8,9 @@ import { RouteSummary } from './components/RouteSummary';
 import { useCurrentLocation } from './hooks/useCurrentLocation';
 import { reverseGeocode } from './api/photon';
 import { buildPlaceUrl } from './lib/googleMaps';
+import { YahooSettings } from './components/YahooSettings';
 import { applyFeeNotes, loadFeeNotes, saveFeeNote, type FeeNotes } from './lib/feeStore';
+import { loadYahooAppId, saveYahooAppId } from './lib/settings';
 import { rankParking } from './lib/score';
 import {
   DEFAULT_FILTERS,
@@ -34,6 +36,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [pickingOnMap, setPickingOnMap] = useState(false);
+  const [yahooAppId, setYahooAppId] = useState<string | null>(() => loadYahooAppId());
   const currentLocation = useCurrentLocation();
 
   // 検索の基準点。出発地を決めていなくても、端末の現在地が取れていれば使う
@@ -153,6 +156,7 @@ export default function App() {
             onSelect={setDestination}
             onClear={handleReset}
             near={searchOrigin}
+            yahooAppId={yahooAppId}
             locationPrompt={
               searchOrigin ? null : (
                 <p className="hint">
@@ -204,6 +208,7 @@ export default function App() {
             placeholder="未入力なら Google マップの現在地"
             selected={origin}
             near={searchOrigin}
+            yahooAppId={yahooAppId}
             onSelect={setOrigin}
             onClear={() => {
               setOrigin(null);
@@ -221,6 +226,11 @@ export default function App() {
             }
           />
           {currentLocation.error && <p className="hint hint--error">{currentLocation.error}</p>}
+
+          <YahooSettings
+            appId={yahooAppId}
+            onChange={(next) => setYahooAppId(saveYahooAppId(next))}
+          />
 
           <label className="toggle">
             <input
