@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dedupeParking, parseParkingElement, type OverpassElement } from './overpass';
+import { EMPTY_FEE } from '../lib/fee';
 import type { ParkingLot } from '../types';
 
 const destination = { lat: 35.6595, lng: 139.7005 };
@@ -74,6 +75,30 @@ describe('parseParkingElement', () => {
     expect(parseParkingElement(element({ tags: { maxheight: "6'6\"" } }), destination)?.maxHeightM).toBeNull();
   });
 
+  it('charge から単価と最大料金を読み取る', () => {
+    const lot = parseParkingElement(
+      element({ tags: { charge: '300円/30分 最大1,000円' } }),
+      destination,
+    );
+    expect(lot?.parsedFee.rate).toEqual({ unitJpy: 300, unitMinutes: 30 });
+    expect(lot?.parsedFee.maxJpy).toBe(1000);
+  });
+
+  it('charge と fee:conditions に情報が散っていても両方拾う', () => {
+    const lot = parseParkingElement(
+      element({ tags: { charge: '300円/30分', 'fee:conditions': '最大1,500円' } }),
+      destination,
+    );
+    expect(lot?.parsedFee.rate).toEqual({ unitJpy: 300, unitMinutes: 30 });
+    expect(lot?.parsedFee.maxJpy).toBe(1500);
+  });
+
+  it('maxstay を分に直す', () => {
+    expect(parseParkingElement(element({ tags: { maxstay: '2 h' } }), destination)?.maxStayMinutes)
+      .toBe(120);
+    expect(parseParkingElement(element({ tags: {} }), destination)?.maxStayMinutes).toBeNull();
+  });
+
   it('parking タグを構造区分に対応づける', () => {
     expect(parseParkingElement(element({ tags: { parking: 'multi_storey' } }), destination)?.kind).toBe('multi-storey');
     expect(parseParkingElement(element({ tags: { parking: 'street_side' } }), destination)?.kind).toBe('street-side');
@@ -95,9 +120,11 @@ describe('dedupeParking', () => {
     lng: 139.701,
     fee: 'unknown',
     feeNote: null,
+    parsedFee: EMPTY_FEE,
     kind: 'unknown',
     capacity: null,
     openingHours: null,
+    maxStayMinutes: null,
     maxHeightM: null,
     distanceM: 100,
     walkMinutes: 2,
