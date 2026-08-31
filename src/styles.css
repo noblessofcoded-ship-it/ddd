@@ -226,6 +226,25 @@ body {
 .tried .tried--skipped::before {
   content: '– ';
 }
+/* 名前が一致しない候補。結果と同列に見せない */
+.nearmiss {
+  border-top: 1px solid #fde68a;
+  padding-top: 8px;
+  flex: 1 0 100%;
+}
+.nearmiss summary {
+  font-size: 12px;
+  color: #92400e;
+  cursor: pointer;
+}
+.nearmiss__note {
+  margin: 6px 0;
+  font-size: 11px;
+  color: #78350f;
+}
+.notfound__body--warn {
+  font-weight: 700;
+}
 .notfound__wide {
   flex: 1 0 100%;
   font-size: 14px;
