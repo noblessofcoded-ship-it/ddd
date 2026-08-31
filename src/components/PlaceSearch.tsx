@@ -166,8 +166,9 @@ export function PlaceSearch({
         <div className="notfound">
           <p className="notfound__title">見つかりませんでした</p>
           <p className="notfound__body">
-            この地図データ（OpenStreetMap）に登録されていない店舗の可能性があります。
-            店名を短くするか、近くの目印になる建物や交差点で探してみてください。
+            {near
+              ? 'この地図データ（OpenStreetMap）に登録されていない店舗の可能性があります。店名を短くするか、近くの目印になる建物や交差点で探してみてください。'
+              : '現在地を設定すると、地図データの店名を直接たどる検索まで試せます。それでも見つからない場合は、登録されていない店舗の可能性があります。'}
           </p>
           {fallback?.(normalizeQuery(query))}
         </div>

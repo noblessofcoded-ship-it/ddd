@@ -125,23 +125,40 @@ export async function searchPlaces(
     };
   };
 
-  // 語を落としながら最大 2 巡。これ以上広げても精度より負荷が勝る
-  for (const variant of variants.slice(0, 2)) {
+  /**
+   * 手の広げ方。上から順に試し、名前の合う結果が出た時点で止める。
+   *
+   * 2 段目で位置バイアスを外すのが肝。現在地の近さを強く効かせているぶん、
+   * 離れた土地の店は上位に出てこない。1 段目で当たらなければ、
+   * 全国から素直に探し直す必要がある。
+   */
+  const attempts: Array<{ query: string; near: LatLng | null }> = [
+    { query: variants[0], near },
+    ...(near ? [{ query: variants[0], near: null }] : []),
+    ...(variants.length > 1 ? [{ query: variants[1], near }] : []),
+  ];
+
+  // 実際に何段目まで進んだか。1 段目で当たれば「緩めていない」
+  let attemptsRun = 0;
+
+  for (const attempt of attempts) {
+    attemptsRun += 1;
     const [photon, nominatim] = await Promise.all([
-      settled(searchPhoton(variant, { signal, near, limit: FETCH_LIMIT })),
-      settled(searchNominatim(variant, { signal, near, limit: FETCH_LIMIT })),
+      settled(searchPhoton(attempt.query, { signal, near: attempt.near, limit: FETCH_LIMIT })),
+      settled(searchNominatim(attempt.query, { signal, near: attempt.near, limit: FETCH_LIMIT })),
     ]);
 
-    triedQueries.push(variant);
+    if (!triedQueries.includes(attempt.query)) triedQueries.push(attempt.query);
     collected = mergePlaces([collected, photon, nominatim]);
 
     if (hasRelevantHit(collected, tokens) || signal?.aborted) break;
 
     // 当たりが無いので次の手に進むが、今ある結果は先に見せておく
-    if (collected.length > 0 && !signal?.aborted) onPartial?.(shape(true));
+    if (collected.length > 0) onPartial?.(shape(true));
   }
 
-  // ジオコーダが名前の合うものを出せなかったときの最終手段
+  // ジオコーダが名前の合うものを出せなかったときの最終手段。
+  // 範囲を絞らないと重すぎるので、基準点が分かっているときだけ使える
   let usedNameSearch = false;
   if (near && !signal?.aborted && !hasRelevantHit(collected, tokens)) {
     const byName = await settled(searchPlacesByName(tokens, near, { signal }));
@@ -151,5 +168,5 @@ export async function searchPlaces(
     }
   }
 
-  return shape(triedQueries.length > 1 || usedNameSearch);
+  return shape(attemptsRun > 1 || usedNameSearch);
 }

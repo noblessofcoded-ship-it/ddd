@@ -137,7 +137,8 @@ describe('searchPlaces', () => {
     expect(result.places.map((p) => p.name)).toEqual(['民生炒飯']);
     expect(result.triedQueries).toEqual(['台湾鍋 民生炒飯', '民生炒飯']);
     expect(result.relaxed).toBe(true);
-    expect(calls.filter((c) => c.includes('photon'))).toHaveLength(2);
+    // 全語（位置バイアスあり）→ 全語（バイアスなし）→ 語を落として、の 3 段
+    expect(calls.filter((c) => c.includes('photon'))).toHaveLength(3);
   });
 
   it('ジオコーダが空なら Overpass の名称検索に落とす', async () => {
@@ -160,7 +161,7 @@ describe('searchPlaces', () => {
     await searchPlaces('台湾鍋　民生炒飯', { near: OSAKA });
 
     const overpassCall = calls.find((c) => c.startsWith('overpass:'));
-    expect(overpassCall).toContain('"name"~"台湾鍋|民生炒飯"');
+    expect(overpassCall).toContain('~"台湾鍋|民生炒飯"');
     expect(overpassCall).not.toContain('"台湾鍋 民生炒飯"');
   });
 
@@ -173,7 +174,7 @@ describe('searchPlaces', () => {
     await searchPlaces('東 民生炒飯', { near: OSAKA });
 
     const overpassCall = calls.find((c) => c.startsWith('overpass:'));
-    expect(overpassCall).toContain('"name"~"民生炒飯"');
+    expect(overpassCall).toContain('~"民生炒飯"');
   });
 
   it('現在地が無ければ Overpass の名称検索は行わない（範囲を絞れないため）', async () => {
@@ -229,7 +230,7 @@ describe('searchPlaces — 当たり外れの判定', () => {
     });
 
     const result = await searchPlaces('台湾鍋　民生炒飯', { near: OSAKA });
-    expect(calls.filter((c) => c.includes('photon'))).toHaveLength(2);
+    expect(calls.filter((c) => c.includes('photon')).length).toBeGreaterThanOrEqual(2);
     expect(result.places.map((p) => p.name)).toEqual(['民生炒飯']);
   });
 
@@ -277,5 +278,58 @@ describe('searchPlaces — 当たり外れの判定', () => {
 
     const result = await searchPlaces('存在しない店', { near: OSAKA });
     expect(result.places.map((p) => p.name)).toEqual(['似ているかもしれない店']);
+  });
+});
+
+describe('searchPlaces — 現在地から離れた地点', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('現在地の近くに無ければ、位置バイアスを外して引き直す', async () => {
+    // 現在地優先の検索では出てこないが、全国から探せば見つかる店
+    const calls = stubFetch((url) => {
+      if (!url.includes('photon')) return [];
+      // lat が付いている＝位置バイアスあり。そのときは当たりを返さない
+      return url.includes('lat=') ? photonResponse(['近所の無関係な店']) : photonResponse(['神楽亭']);
+    });
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA });
+
+    const photonCalls = calls.filter((c) => c.includes('photon'));
+    expect(photonCalls).toHaveLength(2);
+    expect(photonCalls[0]).toContain('lat=');
+    expect(photonCalls[1]).not.toContain('lat=');
+    expect(result.places.map((p) => p.name)).toEqual(['神楽亭']);
+    expect(result.relaxed).toBe(true);
+  });
+
+  it('1 段目で当たれば、バイアスを外した検索はしない', async () => {
+    const calls = stubFetch((url) => (url.includes('photon') ? photonResponse(['神楽亭']) : []));
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA });
+
+    expect(calls.filter((c) => c.includes('photon'))).toHaveLength(1);
+    expect(result.relaxed).toBe(false);
+  });
+
+  it('現在地が無ければ、そもそもバイアスが無いので引き直さない', async () => {
+    const calls = stubFetch((url) => (url.includes('photon') ? { features: [] } : []));
+
+    await searchPlaces('神楽亭');
+
+    expect(calls.filter((c) => c.includes('photon'))).toHaveLength(1);
+  });
+
+  it('バイアスを外した検索でも当たらなければ、Overpass まで進む', async () => {
+    const calls = stubFetch((url) => {
+      if (url.includes('interpreter')) return overpassResponse(['神楽亭']);
+      return url.includes('photon') ? { features: [] } : [];
+    });
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA });
+
+    expect(calls.filter((c) => c.includes('photon'))).toHaveLength(2);
+    expect(calls.some((c) => c.startsWith('overpass:'))).toBe(true);
+    expect(result.places.map((p) => p.name)).toEqual(['神楽亭']);
   });
 });

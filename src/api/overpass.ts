@@ -328,15 +328,17 @@ export async function searchPlacesByName(
   const usable = terms.map((term) => term.trim()).filter((term) => term.length >= 2);
   if (usable.length === 0) return [];
 
-  const radius = options.radiusM ?? 30_000;
+  const radius = options.radiusM ?? 50_000;
   const limit = options.limit ?? 20;
   const around = `around:${radius},${near.lat},${near.lng}`;
   const pattern = usable.map(escapeForOverpassRegex).join('|');
 
+  // name だけを見ると、name:ja や alt_name にしか名前が無い地点を取りこぼす
   const data = `[out:json][timeout:25];
 (
-  node["name"~"${pattern}"](${around});
-  way["name"~"${pattern}"](${around});
+  node[~"^(name|name:ja|alt_name|official_name|branch)$"~"${pattern}"](${around});
+  way[~"^(name|name:ja|alt_name|official_name|branch)$"~"${pattern}"](${around});
+  relation[~"^(name|name:ja|alt_name|official_name|branch)$"~"${pattern}"](${around});
 );
 out center tags ${limit};`;
 
@@ -345,15 +347,17 @@ out center tags ${limit};`;
   return (json.elements ?? []).flatMap((element) => {
     const lat = element.lat ?? element.center?.lat;
     const lng = element.lon ?? element.center?.lon;
-    const name = element.tags?.['name:ja'] ?? element.tags?.name;
+    const tags = element.tags ?? {};
+    const name = tags['name:ja'] ?? tags.name ?? tags.alt_name ?? tags.official_name;
     if (typeof lat !== 'number' || typeof lng !== 'number' || !name) return [];
 
     const address = [
-      element.tags?.['addr:province'] ?? element.tags?.['addr:state'],
-      element.tags?.['addr:city'],
-      element.tags?.['addr:suburb'],
-      element.tags?.['addr:block_number'],
-      element.tags?.['addr:housenumber'],
+      tags['addr:province'] ?? tags['addr:state'],
+      tags['addr:city'],
+      tags['addr:ward'] ?? tags['addr:suburb'],
+      tags['addr:quarter'] ?? tags['addr:neighbourhood'],
+      tags['addr:block_number'],
+      tags['addr:housenumber'],
     ]
       .filter(Boolean)
       .join(' ');
