@@ -1,6 +1,8 @@
+import { formatDuration } from '../lib/fee';
 import type { ParkingFilters } from '../types';
 
 const WALK_OPTIONS = [200, 300, 500, 800, 1200];
+const STAY_OPTIONS = [30, 60, 120, 180, 360, 720];
 
 type Props = {
   filters: ParkingFilters;
@@ -12,22 +14,47 @@ export function ParkingFilterBar({ filters, onChange }: Props) {
 
   return (
     <div className="filters">
-      <label className="filters__row">
-        <span>目的地から</span>
-        <select
-          className="select"
-          value={filters.maxWalkM}
-          onChange={(event) => patch({ maxWalkM: Number(event.target.value) })}
-        >
-          {WALK_OPTIONS.map((meters) => (
-            <option key={meters} value={meters}>
-              {meters}m以内
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="filters__selects">
+        <label className="filters__row">
+          <span>目的地から</span>
+          <select
+            className="select"
+            value={filters.maxWalkM}
+            onChange={(event) => patch({ maxWalkM: Number(event.target.value) })}
+          >
+            {WALK_OPTIONS.map((meters) => (
+              <option key={meters} value={meters}>
+                {meters}m以内
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="filters__row">
+          <span>駐車時間</span>
+          <select
+            className="select"
+            value={filters.stayMinutes}
+            onChange={(event) => patch({ stayMinutes: Number(event.target.value) })}
+          >
+            {STAY_OPTIONS.map((minutes) => (
+              <option key={minutes} value={minutes}>
+                {formatDuration(minutes)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       <div className="filters__chips">
+        <button
+          type="button"
+          className={`chip ${filters.openNowOnly ? 'chip--on' : ''}`}
+          aria-pressed={filters.openNowOnly}
+          onClick={() => patch({ openNowOnly: !filters.openNowOnly })}
+        >
+          今すぐ停められる
+        </button>
         <button
           type="button"
           className={`chip ${filters.freeOnly ? 'chip--on' : ''}`}

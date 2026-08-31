@@ -1,3 +1,4 @@
+import { parseCharge, parseMaxStay } from '../lib/fee';
 import { distanceMeters, walkMinutes } from '../lib/geo';
 import type { FeeKind, LatLng, ParkingKind, ParkingLot } from '../types';
 
@@ -77,6 +78,8 @@ export function parseParkingElement(
 
   const kind = KIND_BY_TAG[tags.parking ?? ''] ?? 'unknown';
   const distance = distanceMeters(destination, { lat, lng });
+  // charge と fee:conditions の両方に情報が散っていることがあるので繋げて解釈する
+  const feeNote = [tags.charge, tags['fee:conditions']].filter(Boolean).join(' ') || null;
 
   return {
     id: `${element.type}/${element.id}`,
@@ -84,10 +87,12 @@ export function parseParkingElement(
     lat,
     lng,
     fee: parseFee(tags),
-    feeNote: tags.charge ?? tags['fee:conditions'] ?? null,
+    feeNote,
+    parsedFee: parseCharge(feeNote),
     kind,
     capacity: parseCapacity(tags.capacity),
     openingHours: tags.opening_hours ?? null,
+    maxStayMinutes: parseMaxStay(tags.maxstay),
     maxHeightM: parseMaxHeight(tags.maxheight),
     distanceM: Math.round(distance),
     walkMinutes: walkMinutes(distance),

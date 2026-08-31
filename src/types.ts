@@ -1,3 +1,6 @@
+import type { ParsedFee } from './lib/fee';
+import type { OpenState } from './lib/openingHours';
+
 /** 緯度経度 */
 export type LatLng = {
   lat: number;
@@ -32,11 +35,15 @@ export type ParkingLot = LatLng & {
   fee: FeeKind;
   /** 料金の説明文（`fee:conditions` や `charge` タグ） */
   feeNote: string | null;
+  /** 料金文字列から読み取れた単価・最大料金 */
+  parsedFee: ParsedFee;
   kind: ParkingKind;
   /** 収容台数。不明なら null */
   capacity: number | null;
   /** 営業時間の生文字列（例: "24/7"） */
   openingHours: string | null;
+  /** 最大駐車時間（分）。制限なし・不明なら null */
+  maxStayMinutes: number | null;
   /** 車高制限（m）。不明なら null */
   maxHeightM: number | null;
   /** 目的地からの直線距離(m) */
@@ -51,6 +58,14 @@ export type RankedParking = ParkingLot & {
   score: number;
   /** カードに出す推薦理由 */
   reasons: string[];
+  /** 滞在時間ぶんの概算料金（円）。算出できなければ null */
+  estimatedFeeJpy: number | null;
+  /** 概算料金が最大料金で頭打ちになったか */
+  feeCapped: boolean;
+  /** 評価時点で営業中かどうか */
+  openState: OpenState;
+  /** 滞在時間が最大駐車時間を超えているか */
+  exceedsMaxStay: boolean;
 };
 
 /** レコメンドの絞り込み条件 */
@@ -63,6 +78,10 @@ export type ParkingFilters = {
   coveredOnly: boolean;
   /** 車高(m)。指定すると制限に引っかかる駐車場を除外 */
   vehicleHeightM: number | null;
+  /** 予定している滞在時間(分)。料金の見積もりに使う */
+  stayMinutes: number;
+  /** 今すぐ停められる（営業中の）駐車場だけに絞る */
+  openNowOnly: boolean;
 };
 
 export const DEFAULT_FILTERS: ParkingFilters = {
@@ -70,4 +89,6 @@ export const DEFAULT_FILTERS: ParkingFilters = {
   freeOnly: false,
   coveredOnly: false,
   vehicleHeightM: null,
+  stayMinutes: 120,
+  openNowOnly: false,
 };

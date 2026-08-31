@@ -55,7 +55,14 @@ export default function App() {
     return () => controller.abort();
   }, [destination, wantsParking]);
 
-  const ranked = useMemo(() => rankParking(lots, filters), [lots, filters]);
+  // 営業状態は時刻に依存するので、1 分ごとに評価し直す
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const ranked = useMemo(() => rankParking(lots, filters, { now }), [lots, filters, now]);
 
   // 絞り込みで消えた駐車場が選ばれたままにならないようにする
   useEffect(() => {
@@ -187,6 +194,7 @@ export default function App() {
                     lot={lot}
                     rank={index + 1}
                     selected={lot.id === selectedId}
+                    stayMinutes={filters.stayMinutes}
                     onSelect={() => setSelectedId(lot.id)}
                   />
                 ))}
@@ -202,6 +210,7 @@ export default function App() {
             origin={origin}
             destination={destination}
             parking={wantsParking ? selectedParking : null}
+            stayMinutes={filters.stayMinutes}
           />
         </footer>
       )}
