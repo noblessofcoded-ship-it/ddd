@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { searchPlaces } from '../api/placeSearch';
+import { searchPlaces, type SearchFailure } from '../api/placeSearch';
 import { distanceMeters, formatDistance } from '../lib/geo';
 import { useDebounced } from '../hooks/useDebounced';
 import { normalizeQuery } from '../lib/query';
@@ -28,7 +28,7 @@ type SearchState = {
   nearMisses: Place[];
   triedQueries: string[];
   relaxed: boolean;
-  failed: boolean;
+  failures: SearchFailure[];
   usedNameSearch: boolean;
   searched: boolean;
 };
@@ -38,7 +38,7 @@ const EMPTY: SearchState = {
   nearMisses: [],
   triedQueries: [],
   relaxed: false,
-  failed: false,
+  failures: [],
   usedNameSearch: false,
   searched: false,
 };
@@ -188,13 +188,20 @@ export function PlaceSearch({
             <li className={state.usedNameSearch ? '' : 'tried--skipped'}>
               {state.usedNameSearch
                 ? '地図データの名称を部分一致で検索'
-                : '地図データの名称を部分一致で検索（現在地が必要なため未実行）'}
+                : near
+                  ? '地図データの名称を部分一致で検索（応答が無く未完了）'
+                  : '地図データの名称を部分一致で検索（現在地が必要なため未実行）'}
             </li>
+            {state.failures.map((failure) => (
+              <li key={failure.source} className="tried--failed">
+                {failure.source}：{failure.message}
+              </li>
+            ))}
           </ul>
 
-          {state.failed && (
+          {state.failures.length > 0 && (
             <p className="notfound__body notfound__body--warn">
-              検索サービスの一部が応答しませんでした。登録が無いのではなく、
+              上記のサービスが応答しませんでした。登録が無いのではなく、
               調べきれていない可能性があります。時間をおいて試してみてください。
             </p>
           )}

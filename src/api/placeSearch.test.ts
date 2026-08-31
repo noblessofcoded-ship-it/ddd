@@ -417,24 +417,37 @@ describe('searchPlaces — 見つからないことを正しく伝える', () =>
     expect(result.nearMisses.map((p) => p.name)).toEqual(['神楽殿']);
   });
 
-  it('検索サービスが落ちたことを記録する', async () => {
+  it('どのサービスがなぜ落ちたかを記録する', async () => {
     stubFetch((url) => {
       if (url.includes('interpreter')) return { elements: [] };
       return url.includes('photon') ? null : [];
     });
 
     const result = await searchPlaces('神楽亭', { near: OSAKA });
-    expect(result.failed).toBe(true);
+    expect(result.failures.map((f) => f.source)).toContain('Photon');
+    expect(result.failures[0].message).toBeTruthy();
   });
 
-  it('全部応答すれば failed は立てない', async () => {
+  it('全部応答すれば失敗は記録しない', async () => {
     stubFetch((url) => {
       if (url.includes('interpreter')) return { elements: [] };
       return url.includes('photon') ? { features: [] } : [];
     });
 
     const result = await searchPlaces('神楽亭', { near: OSAKA });
-    expect(result.failed).toBe(false);
+    expect(result.failures).toEqual([]);
+  });
+
+  it('名称検索が落ちたら「実行済み」にしない', async () => {
+    // 失敗を実行済みと表示すると、調べ切ったように誤解させてしまう
+    stubFetch((url) => {
+      if (url.includes('interpreter')) return null;
+      return url.includes('photon') ? { features: [] } : [];
+    });
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA });
+    expect(result.usedNameSearch).toBe(false);
+    expect(result.failures.map((f) => f.source)).toContain('地図データの名称検索');
   });
 
   it('近い候補は件数を絞る', async () => {
@@ -501,7 +514,7 @@ describe('searchPlaces — Yahoo! ローカルサーチの併用', () => {
     const result = await searchPlaces('神楽亭', { near: OSAKA, yahooAppId: 'APPID' });
 
     expect(result.places.map((p) => p.name)).toEqual(['神楽亭']);
-    expect(result.failed).toBe(true);
+    expect(result.failures.map((f) => f.source)).toContain('Yahoo!ローカルサーチ');
   });
 
   it('同じ店が両方から返っても 1 件にまとめる', async () => {

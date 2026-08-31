@@ -6,6 +6,12 @@ import { searchPlacesByName } from './overpass';
 import { searchPlaces as searchPhoton } from './photon';
 import { searchPlaces as searchYahoo } from './yahooLocal';
 
+/** 応答しなかった検索サービスと、その理由 */
+export type SearchFailure = {
+  source: string;
+  message: string;
+};
+
 export type PlaceSearchOptions = {
   signal?: AbortSignal;
   /** 現在地。近い順に並べ替え、各サービスの検索も周辺優先にする */
@@ -38,10 +44,11 @@ export type PlaceSearchResult = {
   /** 語を落とすか地図データ直引きに頼った */
   relaxed: boolean;
   /**
-   * いずれかの検索サービスが応答しなかった。
-   * 「探して無かった」と「探せなかった」は利用者にとって意味が違うため区別する。
+   * 応答しなかった検索サービス。
+   * 「探して無かった」と「探せなかった」は利用者にとって意味が違ううえ、
+   * どれが落ちたか分からないと原因を追えないので、名前と理由を残す。
    */
-  failed: boolean;
+  failures: SearchFailure[];
   /**
    * 地図データの名称検索（部分一致）まで進んだか。
    * ジオコーダは語の単位でしか一致を見ないため、「肉の天満屋 神楽亭」を
@@ -95,14 +102,17 @@ export function rankPlaces(places: Place[], tokens: string[], near: LatLng | nul
 
 /**
  * 片方が落ちてももう片方の結果を返せるように、失敗は空配列として扱う。
- * ただし失敗したこと自体は記録する。「見つからない」と「調べられなかった」は
- * 利用者にとって意味が違うため。
+ * ただし、どのサービスがなぜ落ちたかは記録する。
  */
-async function settled(promise: Promise<Place[]>, onFail: () => void): Promise<Place[]> {
+async function settled(
+  promise: Promise<Place[]>,
+  source: string,
+  onFail: (failure: SearchFailure) => void,
+): Promise<Place[]> {
   try {
     return await promise;
-  } catch {
-    onFail();
+  } catch (error) {
+    onFail({ source, message: error instanceof Error ? error.message : '応答がありませんでした' });
     return [];
   }
 }
@@ -139,7 +149,7 @@ export async function searchPlaces(
       nearMisses: [],
       triedQueries: [],
       relaxed: false,
-      failed: false,
+      failures: [],
       usedNameSearch: false,
     };
   }
@@ -150,10 +160,8 @@ export async function searchPlaces(
   let collected: Place[] = [];
 
   let usedNameSearch = false;
-  let failed = false;
-  const markFailed = () => {
-    failed = true;
-  };
+  const failures: SearchFailure[] = [];
+  const markFailed = (failure: SearchFailure) => failures.push(failure);
 
   /** 今ある結果を整えて返す。途中経過の通知にも使う */
   const shape = (relaxed: boolean): PlaceSearchResult => {
@@ -165,7 +173,7 @@ export async function searchPlaces(
       nearMisses: ranked.filter((place) => !isRelevant(place.name, tokens)).slice(0, limit),
       triedQueries: [...triedQueries],
       relaxed,
-      failed,
+      failures: [...failures],
       usedNameSearch,
     };
   };
@@ -197,14 +205,17 @@ export async function searchPlaces(
           near: attempt.near,
           limit: FETCH_LIMIT,
         }),
+        'Yahoo!ローカルサーチ',
         markFailed,
       ),
       settled(
         searchPhoton(attempt.query, { signal, near: attempt.near, limit: FETCH_LIMIT }),
+        'Photon',
         markFailed,
       ),
       settled(
         searchNominatim(attempt.query, { signal, near: attempt.near, limit: FETCH_LIMIT }),
+        'Nominatim',
         markFailed,
       ),
     ]);
@@ -221,8 +232,14 @@ export async function searchPlaces(
   // ジオコーダが名前の合うものを出せなかったときの最終手段。
   // 範囲を絞らないと重すぎるので、基準点が分かっているときだけ使える
   if (near && !signal?.aborted && !hasRelevantHit(collected, tokens)) {
-    usedNameSearch = true;
-    const byName = await settled(searchPlacesByName(tokens, near, { signal }), markFailed);
+    const before = failures.length;
+    const byName = await settled(
+      searchPlacesByName(tokens, near, { signal }),
+      '地図データの名称検索',
+      markFailed,
+    );
+    // 失敗したものを「実行した」と表示すると、調べ切ったように誤解させてしまう
+    usedNameSearch = failures.length === before;
     if (byName.length > 0) collected = mergePlaces([collected, byName]);
   }
 
