@@ -131,6 +131,9 @@ describe('dedupeParking', () => {
     openingHours: null,
     maxStayMinutes: null,
     maxHeightM: null,
+    maxWidthM: null,
+    maxLengthM: null,
+    surface: null,
     distanceM: 100,
     walkMinutes: 2,
   };

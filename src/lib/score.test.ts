@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { dataConfidence, matchesFilters, rankParking, scoreParking } from './score';
+import {
+  dataConfidence,
+  easeLevel,
+  easeNotes,
+  easeScore,
+  matchesFilters,
+  rankParking,
+  scoreParking,
+} from './score';
+import { findVehicle } from './vehicle';
 import { EMPTY_FEE, parseCharge } from './fee';
 import { DEFAULT_FILTERS, type ParkingLot } from '../types';
 
@@ -25,6 +34,9 @@ function lot(overrides: Partial<ParkingLot> = {}): ParkingLot {
     openingHours: null,
     maxStayMinutes: null,
     maxHeightM: null,
+    maxWidthM: null,
+    maxLengthM: null,
+    surface: null,
     distanceM: 200,
     walkMinutes: 4,
     ...overrides,
@@ -114,9 +126,11 @@ describe('matchesFilters', () => {
     expect(matchesFilters(lot({ kind: 'surface' }), filters, 'unknown')).toBe(false);
   });
 
-  it('車高制限に引っかかるものだけ落とす（制限不明は残す）', () => {
-    const filters = { ...DEFAULT_FILTERS, vehicleHeightM: 2.1 };
-    expect(matchesFilters(lot({ maxHeightM: 1.8 }), filters, 'unknown')).toBe(false);
+  it('その車が入れない駐車場を落とす（制限不明は残す）', () => {
+    const filters = { ...DEFAULT_FILTERS, vehicle: findVehicle('ミニバン・SUV') };
+    expect(matchesFilters(lot({ maxHeightM: 1.55 }), filters, 'unknown')).toBe(false);
+    expect(matchesFilters(lot({ maxWidthM: 1.7 }), filters, 'unknown')).toBe(false);
+    expect(matchesFilters(lot({ maxLengthM: 4.5 }), filters, 'unknown')).toBe(false);
     expect(matchesFilters(lot({ maxHeightM: 2.5 }), filters, 'unknown')).toBe(true);
     expect(matchesFilters(lot({ maxHeightM: null }), filters, 'unknown')).toBe(true);
   });
@@ -306,5 +320,100 @@ describe('rankParking — 注意書きと絞り込み', () => {
       filters,
     );
     expect(ranked.map((r) => r.id)).toEqual(['node/known']);
+  });
+});
+
+describe('easeScore — 停めやすさ', () => {
+  it('屋外の平面がいちばん停めやすい', () => {
+    expect(easeScore(lot({ kind: 'surface' }))).toBeGreaterThan(easeScore(lot({ kind: 'underground' })));
+  });
+
+  it('路上の駐車枠は大きく下がる', () => {
+    expect(easeScore(lot({ kind: 'street-side' }))).toBeLessThan(easeScore(lot({ kind: 'surface' })) * 0.8);
+  });
+
+  it('車高制限が低いほど下がる（機械式の代理指標）', () => {
+    const tall = easeScore(lot({ maxHeightM: 2.5 }));
+    const mid = easeScore(lot({ maxHeightM: 1.9 }));
+    const low = easeScore(lot({ maxHeightM: 1.55 }));
+    expect(tall).toBeGreaterThan(mid);
+    expect(mid).toBeGreaterThan(low);
+  });
+
+  it('車幅・車長の制限も効く', () => {
+    expect(easeScore(lot({ maxWidthM: 1.7 }))).toBeLessThan(easeScore(lot({ maxWidthM: 2.2 })));
+    expect(easeScore(lot({ maxLengthM: 4.4 }))).toBeLessThan(easeScore(lot({ maxLengthM: 5.5 })));
+  });
+
+  it('未舗装は下がる', () => {
+    expect(easeScore(lot({ surface: 'gravel' }))).toBeLessThan(easeScore(lot({ surface: 'asphalt' })));
+  });
+
+  it('0〜1 に収まる', () => {
+    const best = easeScore(lot({ kind: 'surface', maxHeightM: 3, maxWidthM: 3, maxLengthM: 8, surface: 'asphalt' }));
+    const worst = easeScore(lot({ kind: 'street-side', maxHeightM: 1.4, maxWidthM: 1.6, maxLengthM: 4, surface: 'grass' }));
+    expect(best).toBeLessThanOrEqual(1);
+    expect(worst).toBeGreaterThanOrEqual(0);
+    expect(best).toBeGreaterThan(worst);
+  });
+});
+
+describe('easeNotes — 停めやすさの根拠', () => {
+  it('構造を必ず出す', () => {
+    expect(easeNotes(lot({ kind: 'multi-storey' }))).toContain('立体');
+    expect(easeNotes(lot({ kind: 'unknown' }))).toContain('構造は未登録');
+  });
+
+  it('低い車高制限には機械式の可能性を添える', () => {
+    expect(easeNotes(lot({ maxHeightM: 1.55 }))).toContain('車高1.55mまで（機械式の可能性）');
+    expect(easeNotes(lot({ maxHeightM: 2.1 }))).toContain('車高2.1mまで');
+  });
+
+  it('未舗装だけ路面を出す（舗装は当たり前なので出さない）', () => {
+    expect(easeNotes(lot({ surface: 'gravel' }))).toContain('未舗装');
+    expect(easeNotes(lot({ surface: 'asphalt' }))).not.toContain('未舗装');
+  });
+});
+
+describe('scoreParking — 停めやすさの反映', () => {
+  it('条件が同じなら停めやすい方が上に来る', () => {
+    const easy = lot({ kind: 'surface', maxHeightM: 2.5, surface: 'asphalt' });
+    const hard = lot({ kind: 'underground', maxHeightM: 1.55, surface: 'asphalt' });
+    expect(scoreParking(easy, DEFAULT_FILTERS, null)).toBeGreaterThan(
+      scoreParking(hard, DEFAULT_FILTERS, null),
+    );
+  });
+
+  it('近さの方が重い（少し遠くても停めやすいだけでは逆転しない）', () => {
+    const nearHard = lot({ distanceM: 60, kind: 'underground', maxHeightM: 1.55 });
+    const farEasy = lot({ distanceM: 480, kind: 'surface', maxHeightM: 2.5 });
+    expect(scoreParking(nearHard, DEFAULT_FILTERS, null)).toBeGreaterThan(
+      scoreParking(farEasy, DEFAULT_FILTERS, null),
+    );
+  });
+});
+
+describe('easeLevel — 見出しの付け方', () => {
+  it('難点が無く総合も高ければ「停めやすい」', () => {
+    expect(easeLevel(lot({ kind: 'surface', maxHeightM: 2.5, surface: 'asphalt' }))).toBe('good');
+  });
+
+  it('未舗装なら、総合が高くても「停めやすい」とは言わない', () => {
+    // 平均に埋もれて難点が消えるのを防ぐ
+    const gravel = lot({ kind: 'surface', surface: 'gravel' });
+    expect(easeScore(gravel)).toBeGreaterThan(0.85);
+    expect(easeLevel(gravel)).not.toBe('good');
+  });
+
+  it('車高制限が低ければ「停めにくい」', () => {
+    expect(easeLevel(lot({ kind: 'multi-storey', maxHeightM: 1.55 }))).toBe('poor');
+  });
+
+  it('路上の駐車枠は「停めにくい」', () => {
+    expect(easeLevel(lot({ kind: 'street-side' }))).toBe('poor');
+  });
+
+  it('情報が無ければ「ふつう」', () => {
+    expect(easeLevel(lot({ kind: 'unknown' }))).toBe('fair');
   });
 });

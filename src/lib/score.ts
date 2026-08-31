@@ -1,18 +1,151 @@
-import type { ParkingFilters, ParkingLot, RankedParking } from '../types';
+import type { ParkingFilters, ParkingKind, ParkingLot, RankedParking } from '../types';
 import { estimateFee, formatDuration, formatJpy, type FeeEstimate } from './fee';
 import { formatDistance } from './geo';
 import { evaluateOpeningHours, type OpenState } from './openingHours';
+import { exceedsLimits } from './vehicle';
 
 /** 各評価軸の重み。合計 100 になるようにしておく */
 const WEIGHTS = {
-  proximity: 45,
-  fee: 25,
-  capacity: 15,
-  comfort: 15,
+  proximity: 40,
+  fee: 22,
+  ease: 18,
+  capacity: 10,
+  comfort: 10,
 } as const;
 
 /** 料金スコアの基準額。この額以上かかるものは 0 点にする */
 const FEE_CEILING_JPY = 2000;
+
+/**
+ * 構造ごとの停めやすさ。
+ * 屋外の平面がいちばん扱いやすく、路上の駐車枠は縦列駐車になるうえ
+ * 前後が詰まっていることも多いので大きく下げる。
+ */
+const EASE_BY_KIND: Record<ParkingKind, number> = {
+  surface: 1,
+  rooftop: 0.75,
+  'multi-storey': 0.7,
+  underground: 0.6,
+  'street-side': 0.15,
+  unknown: 0.6,
+};
+
+/** 舗装されているとみなす路面 */
+const PAVED_SURFACES = new Set(['asphalt', 'concrete', 'paved', 'paving_stones', 'concrete:plates']);
+
+/**
+ * 車高制限から見た停めやすさ。
+ *
+ * 機械式駐車場かどうかを直接示すタグは OSM に無い（提案止まり）。
+ * ただし 1.6m を切る制限はまず機械式で、車種を選び操作にも手間がかかる。
+ * 車高制限の低さを、その代理指標として使う。
+ */
+function heightEase(maxHeightM: number | null): number {
+  if (maxHeightM === null) return 0.85; // 未登録。平均よりやや良い程度に置く
+  if (maxHeightM >= 2.1) return 1;
+  if (maxHeightM >= 1.8) return 0.8;
+  if (maxHeightM >= 1.6) return 0.5;
+  return 0.2;
+}
+
+function widthEase(maxWidthM: number | null): number {
+  if (maxWidthM === null) return 0.85;
+  if (maxWidthM >= 2) return 1;
+  if (maxWidthM >= 1.8) return 0.7;
+  return 0.3;
+}
+
+function lengthEase(maxLengthM: number | null): number {
+  if (maxLengthM === null) return 0.85;
+  if (maxLengthM >= 5) return 1;
+  if (maxLengthM >= 4.7) return 0.8;
+  return 0.4;
+}
+
+function surfaceEase(surface: string | null): number {
+  if (surface === null) return 0.85;
+  return PAVED_SURFACES.has(surface) ? 1 : 0.55;
+}
+
+/**
+ * 停めやすさの内訳の重み。合計 1 になるようにしておく。
+ *
+ * 平面か立体か地下かで扱いやすさは大きく変わるので、構造をいちばん重くする。
+ * 単純平均にすると、他の項目が未登録のときに構造の差が薄まってしまう。
+ */
+const EASE_WEIGHTS = {
+  kind: 0.4,
+  height: 0.25,
+  width: 0.15,
+  length: 0.1,
+  surface: 0.1,
+} as const;
+
+/**
+ * 停めやすさを 0〜1 で見積もる。
+ *
+ * 1 台あたりの区画幅は OSM にほとんど登録が無いため直接は測れない。
+ * 代わりに、構造・車両制限・路面という「入れやすさに効く」手がかりを束ねる。
+ */
+export function easeScore(lot: ParkingLot): number {
+  return (
+    EASE_BY_KIND[lot.kind] * EASE_WEIGHTS.kind +
+    heightEase(lot.maxHeightM) * EASE_WEIGHTS.height +
+    widthEase(lot.maxWidthM) * EASE_WEIGHTS.width +
+    lengthEase(lot.maxLengthM) * EASE_WEIGHTS.length +
+    surfaceEase(lot.surface) * EASE_WEIGHTS.surface
+  );
+}
+
+/** 停めやすさの見出し */
+export type EaseLevel = 'good' | 'fair' | 'poor';
+
+/**
+ * 停めやすさを言葉にする。
+ *
+ * 平均だけで決めると、はっきりした難点が他の項目に埋もれてしまう。
+ * 未舗装や低い車高制限のように、それ単体で困る要素があるときは
+ * 「停めやすい」とは言わない。
+ */
+export function easeLevel(lot: ParkingLot): EaseLevel {
+  const signals = [
+    EASE_BY_KIND[lot.kind],
+    heightEase(lot.maxHeightM),
+    widthEase(lot.maxWidthM),
+    lengthEase(lot.maxLengthM),
+    surfaceEase(lot.surface),
+  ];
+  const worst = Math.min(...signals);
+
+  if (worst < 0.5) return 'poor';
+  if (easeScore(lot) >= 0.85 && worst >= 0.7) return 'good';
+  return 'fair';
+}
+
+const KIND_LABEL: Record<ParkingKind, string> = {
+  surface: '屋外の平面',
+  rooftop: '屋上',
+  'multi-storey': '立体',
+  underground: '地下',
+  'street-side': '路上の駐車枠',
+  unknown: '構造は未登録',
+};
+
+/** 停めやすさの根拠。数字を鵜呑みにさせないために出す */
+export function easeNotes(lot: ParkingLot): string[] {
+  const notes: string[] = [KIND_LABEL[lot.kind]];
+
+  if (lot.maxHeightM !== null) {
+    notes.push(
+      lot.maxHeightM < 1.6 ? `車高${lot.maxHeightM}mまで（機械式の可能性）` : `車高${lot.maxHeightM}mまで`,
+    );
+  }
+  if (lot.maxWidthM !== null) notes.push(`車幅${lot.maxWidthM}mまで`);
+  if (lot.maxLengthM !== null) notes.push(`車長${lot.maxLengthM}mまで`);
+  if (lot.surface !== null && !PAVED_SURFACES.has(lot.surface)) notes.push('未舗装');
+
+  return notes;
+}
 
 /** 屋根があるとみなす構造 */
 const COVERED_KINDS = new Set(['multi-storey', 'underground']);
@@ -142,13 +275,8 @@ export function matchesFilters(
   // 営業状態が判定できないものは落とさない（読めない書式が多いため）
   if (filters.openNowOnly && openState === 'closed') return false;
   if (filters.reliableOnly && dataConfidence(lot) < 0.4) return false;
-  if (
-    filters.vehicleHeightM !== null &&
-    lot.maxHeightM !== null &&
-    lot.maxHeightM < filters.vehicleHeightM
-  ) {
-    return false;
-  }
+  // 入れないと分かっている駐車場は候補から外す
+  if (filters.vehicle !== null && exceedsLimits(lot, filters.vehicle)) return false;
   return true;
 }
 
@@ -164,6 +292,7 @@ export function scoreParking(
   const weighted =
     proximityScore(lot.distanceM, filters.maxWalkM) * WEIGHTS.proximity +
     feeScore(lot, estimate) * WEIGHTS.fee +
+    easeScore(lot) * WEIGHTS.ease +
     capacityScore(lot.capacity) * WEIGHTS.capacity +
     comfortScore(lot) * WEIGHTS.comfort;
 
@@ -202,6 +331,9 @@ export function rankParking(
         reasons: buildReasons(lot, estimate, filters.stayMinutes),
         confidence,
         cautions: buildCautions(lot, confidence),
+        ease: easeScore(lot),
+        easeLevel: easeLevel(lot),
+        easeNotes: easeNotes(lot),
         estimatedFeeJpy: lot.fee === 'free' ? 0 : (estimate?.jpy ?? null),
         feeCapped: estimate?.capped ?? false,
         openState,

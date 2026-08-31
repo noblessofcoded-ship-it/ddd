@@ -20,6 +20,12 @@ type Props = {
   destination?: { lat: number; lng: number } | null;
 };
 
+const EASE_TEXT = {
+  good: '停めやすい',
+  fair: 'ふつう',
+  poor: '停めにくい',
+} as const;
+
 /** 料金欄の表示。概算が出せるなら金額を、無理なら区分を出す */
 function feeLabel(lot: RankedParking): string {
   if (lot.fee === 'free') return '無料';
@@ -87,6 +93,13 @@ export function ParkingCard({
           </strong>
           {showsEstimate && <span className="fee__note">{formatDuration(stayMinutes)}の目安</span>}
           {lot.feeSource === 'user' && <span className="badge">自分で登録</span>}
+        </div>
+
+        <div className="ease">
+          <span className={`ease__label ease__label--${lot.easeLevel}`}>
+            {EASE_TEXT[lot.easeLevel]}
+          </span>
+          <span className="ease__notes">{lot.easeNotes.join('・')}</span>
         </div>
 
         {(lot.openState === 'closed' || lot.exceedsMaxStay || lot.cautions.length > 0) && (
