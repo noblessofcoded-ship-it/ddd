@@ -23,16 +23,20 @@ type Props = {
 
 type SearchState = {
   places: Place[];
+  nearMisses: Place[];
   triedQueries: string[];
   relaxed: boolean;
+  failed: boolean;
   usedNameSearch: boolean;
   searched: boolean;
 };
 
 const EMPTY: SearchState = {
   places: [],
+  nearMisses: [],
   triedQueries: [],
   relaxed: false,
+  failed: false,
   usedNameSearch: false,
   searched: false,
 };
@@ -184,6 +188,13 @@ export function PlaceSearch({
             </li>
           </ul>
 
+          {state.failed && (
+            <p className="notfound__body notfound__body--warn">
+              検索サービスの一部が応答しませんでした。登録が無いのではなく、
+              調べきれていない可能性があります。時間をおいて試してみてください。
+            </p>
+          )}
+
           <p className="notfound__body">
             {state.usedNameSearch
               ? 'この地図データ（OpenStreetMap）に登録されていない可能性があります。店名の一部だけで探すか、近くの目印になる建物や交差点で探してみてください。'
@@ -191,6 +202,32 @@ export function PlaceSearch({
           </p>
 
           {fallback?.(normalizeQuery(query))}
+
+          {state.nearMisses.length > 0 && (
+            <details className="nearmiss">
+              <summary>名前が近いだけの候補（{state.nearMisses.length}件）</summary>
+              <p className="nearmiss__note">
+                入力した名前を含んでいません。別の場所なので、ご確認のうえ選んでください。
+              </p>
+              <ul className="results">
+                {state.nearMisses.map((place) => (
+                  <li key={place.id}>
+                    <button
+                      type="button"
+                      className="results__item"
+                      onClick={() => handleSelect(place)}
+                    >
+                      <strong>{place.name}</strong>
+                      <span>
+                        {near && `${formatDistance(distanceMeters(near, place))}・`}
+                        {place.address || '住所情報なし'}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </div>
       )}
     </div>

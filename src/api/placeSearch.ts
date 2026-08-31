@@ -19,11 +19,23 @@ export type PlaceSearchOptions = {
 };
 
 export type PlaceSearchResult = {
+  /** 名前が検索語に一致した地点だけ。ここに無いものは「見つかった」とは呼べない */
   places: Place[];
+  /**
+   * 名前は一致しないが、検索サービスが近いものとして返してきた地点。
+   * 「神楽亭」に対する「神楽殿」など。結果として並べると誤解を招くので、
+   * 見つからなかったときに別枠で添えるだけにする。
+   */
+  nearMisses: Place[];
   /** 実際に投げたクエリ。入力そのままで足りなければ複数になる */
   triedQueries: string[];
   /** 語を落とすか地図データ直引きに頼った */
   relaxed: boolean;
+  /**
+   * いずれかの検索サービスが応答しなかった。
+   * 「探して無かった」と「探せなかった」は利用者にとって意味が違うため区別する。
+   */
+  failed: boolean;
   /**
    * 地図データの名称検索（部分一致）まで進んだか。
    * ジオコーダは語の単位でしか一致を見ないため、「肉の天満屋 神楽亭」を
@@ -75,11 +87,16 @@ export function rankPlaces(places: Place[], tokens: string[], near: LatLng | nul
     .map((entry) => entry.place);
 }
 
-/** 片方が落ちてももう片方の結果を返せるように、失敗は空配列として扱う */
-async function settled(promise: Promise<Place[]>): Promise<Place[]> {
+/**
+ * 片方が落ちてももう片方の結果を返せるように、失敗は空配列として扱う。
+ * ただし失敗したこと自体は記録する。「見つからない」と「調べられなかった」は
+ * 利用者にとって意味が違うため。
+ */
+async function settled(promise: Promise<Place[]>, onFail: () => void): Promise<Place[]> {
   try {
     return await promise;
   } catch {
+    onFail();
     return [];
   }
 }
@@ -111,7 +128,14 @@ export async function searchPlaces(
   const { signal, near = null, limit = 12, onPartial } = options;
   const normalized = normalizeQuery(rawQuery);
   if (normalized.length === 0) {
-    return { places: [], triedQueries: [], relaxed: false, usedNameSearch: false };
+    return {
+      places: [],
+      nearMisses: [],
+      triedQueries: [],
+      relaxed: false,
+      failed: false,
+      usedNameSearch: false,
+    };
   }
 
   const tokens = tokenize(rawQuery);
@@ -120,16 +144,22 @@ export async function searchPlaces(
   let collected: Place[] = [];
 
   let usedNameSearch = false;
+  let failed = false;
+  const markFailed = () => {
+    failed = true;
+  };
 
   /** 今ある結果を整えて返す。途中経過の通知にも使う */
   const shape = (relaxed: boolean): PlaceSearchResult => {
     const ranked = rankPlaces(collected, tokens, near);
-    // 名前の合うものが 1 件でもあるなら、合わないものは雑音なので落とす
-    const relevant = ranked.filter((place) => isRelevant(place.name, tokens));
+    // 名前が一致しないものを結果として並べると、探し物が見つかったように
+    // 誤解させてしまう。別枠に回して、見つからなかったことは伝える
     return {
-      places: (relevant.length > 0 ? relevant : ranked).slice(0, limit),
+      places: ranked.filter((place) => isRelevant(place.name, tokens)).slice(0, limit),
+      nearMisses: ranked.filter((place) => !isRelevant(place.name, tokens)).slice(0, limit),
       triedQueries: [...triedQueries],
       relaxed,
+      failed,
       usedNameSearch,
     };
   };
@@ -153,8 +183,14 @@ export async function searchPlaces(
   for (const attempt of attempts) {
     attemptsRun += 1;
     const [photon, nominatim] = await Promise.all([
-      settled(searchPhoton(attempt.query, { signal, near: attempt.near, limit: FETCH_LIMIT })),
-      settled(searchNominatim(attempt.query, { signal, near: attempt.near, limit: FETCH_LIMIT })),
+      settled(
+        searchPhoton(attempt.query, { signal, near: attempt.near, limit: FETCH_LIMIT }),
+        markFailed,
+      ),
+      settled(
+        searchNominatim(attempt.query, { signal, near: attempt.near, limit: FETCH_LIMIT }),
+        markFailed,
+      ),
     ]);
 
     if (!triedQueries.includes(attempt.query)) triedQueries.push(attempt.query);
@@ -170,7 +206,7 @@ export async function searchPlaces(
   // 範囲を絞らないと重すぎるので、基準点が分かっているときだけ使える
   if (near && !signal?.aborted && !hasRelevantHit(collected, tokens)) {
     usedNameSearch = true;
-    const byName = await settled(searchPlacesByName(tokens, near, { signal }));
+    const byName = await settled(searchPlacesByName(tokens, near, { signal }), markFailed);
     if (byName.length > 0) collected = mergePlaces([collected, byName]);
   }
 

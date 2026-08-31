@@ -270,14 +270,20 @@ describe('searchPlaces — 当たり外れの判定', () => {
     expect(result.places.map((p) => p.name)).toEqual(['おくまん蒲生四丁目店', 'おくまん京橋西店']);
   });
 
-  it('どこにも名前の合うものが無ければ、集まった結果をそのまま出す', async () => {
+  it('名前が合わないものは結果に混ぜず、別枠に回す', async () => {
+    // 「神楽亭」を探して「神楽殿」「神楽橋」が並ぶような状態を防ぐ
     stubFetch((url) => {
       if (url.includes('interpreter')) return { elements: [] };
-      return url.includes('photon') ? photonResponse(['似ているかもしれない店']) : [];
+      return url.includes('photon') ? photonResponse(['神楽殿', '神楽橋', '神楽所 梅花殿']) : [];
     });
 
-    const result = await searchPlaces('存在しない店', { near: OSAKA });
-    expect(result.places.map((p) => p.name)).toEqual(['似ているかもしれない店']);
+    const result = await searchPlaces('神楽亭', { near: OSAKA });
+
+    expect(result.places).toEqual([]);
+    // 別枠に回したうえで、一致度が横並びなので近い順に並ぶ
+    expect(result.nearMisses.map((p) => p.name).sort()).toEqual(
+      ['神楽所 梅花殿', '神楽橋', '神楽殿'].sort(),
+    );
   });
 });
 
@@ -383,5 +389,52 @@ describe('searchPlaces — 正式名称の一部で探す', () => {
 
     const result = await searchPlaces('神楽亭', { near: OSAKA });
     expect(result.usedNameSearch).toBe(true);
+  });
+});
+
+describe('searchPlaces — 見つからないことを正しく伝える', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('一致するものだけを結果にする', async () => {
+    stubFetch((url) => {
+      if (url.includes('interpreter')) return { elements: [] };
+      return url.includes('photon') ? photonResponse(['肉の天満屋 神楽亭', '神楽殿']) : [];
+    });
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA });
+    expect(result.places.map((p) => p.name)).toEqual(['肉の天満屋 神楽亭']);
+    expect(result.nearMisses.map((p) => p.name)).toEqual(['神楽殿']);
+  });
+
+  it('検索サービスが落ちたことを記録する', async () => {
+    stubFetch((url) => {
+      if (url.includes('interpreter')) return { elements: [] };
+      return url.includes('photon') ? null : [];
+    });
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA });
+    expect(result.failed).toBe(true);
+  });
+
+  it('全部応答すれば failed は立てない', async () => {
+    stubFetch((url) => {
+      if (url.includes('interpreter')) return { elements: [] };
+      return url.includes('photon') ? { features: [] } : [];
+    });
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA });
+    expect(result.failed).toBe(false);
+  });
+
+  it('近い候補は件数を絞る', async () => {
+    const many = Array.from({ length: 30 }, (_, i) => `神楽殿${i}`);
+    stubFetch((url) => {
+      if (url.includes('interpreter')) return { elements: [] };
+      return url.includes('photon') ? photonResponse(many) : [];
+    });
+
+    const result = await searchPlaces('神楽亭', { near: OSAKA, limit: 12 });
+    expect(result.nearMisses.length).toBeLessThanOrEqual(12);
   });
 });
