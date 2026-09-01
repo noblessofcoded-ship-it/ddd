@@ -201,7 +201,7 @@ export function ParkingCard({
               autoComplete="off"
               autoFocus
             />
-            <button type="submit" className="btn btn--primary">
+            <button type="submit" className="btn btn--primary btn--outline">
               保存
             </button>
             <button type="button" className="btn btn--ghost" onClick={() => setEditing(false)}>

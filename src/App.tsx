@@ -268,7 +268,7 @@ export default function App() {
 
           <PlaceSearch
             label="出発地（任意）"
-            placeholder="未入力なら Google マップの現在地"
+            placeholder="未入力なら現在地から"
             selected={origin}
             near={searchOrigin}
             yahooAppId={yahooAppId}
@@ -347,9 +347,13 @@ export default function App() {
           <section className="panel">
             <ParkingFilterBar filters={filters} onChange={setFilters} />
 
+            {/*
+              検索前はこのボタンが画面で唯一の主要操作なので塗りにする。
+              検索後は下のルートパネルに塗りの CTA が出るので、線だけにして譲る。
+            */}
             <button
               type="button"
-              className="btn btn--primary btn--block"
+              className={`btn btn--primary btn--block${searched ? ' btn--outline' : ''}`}
               onClick={() => void searchParking(destination, filters.maxWalkM)}
               disabled={loading}
             >

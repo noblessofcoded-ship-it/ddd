@@ -54,7 +54,7 @@ export function YahooSettings({ appId, onChange }: Props) {
           spellCheck={false}
           aria-label="Yahoo! ローカルサーチAPI の Client ID"
         />
-        <button type="submit" className="btn btn--primary">
+        <button type="submit" className="btn btn--primary btn--outline">
           保存
         </button>
       </form>
