@@ -206,6 +206,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
+        <span className="header__eyebrow">Parking Route</span>
         <h1 className="header__title">パーキングルート</h1>
         <p className="header__sub">目的地の近くの駐車場を選んで、Google マップに引き渡します</p>
       </header>

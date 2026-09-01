@@ -1,50 +1,49 @@
 :root {
-  /* ---- Harvest スタイルのトークン ---- */
-  --color-harvest-flame: #fa5d00;
-  --color-marigold-glow: #fee3b5;
-  --color-parchment-shadow: #e3d6c5;
-  --color-ink-black: #1d1e1c;
-  --color-paper-white: #ffffff;
-  --color-cream-canvas: #fff8f1;
-  --color-mist-gray: #d9d9d9;
-  --color-warm-stone: #615f5c;
-  --color-driftwood: #8e8b87;
-  --color-ironwood: #4a4a47;
-  --color-ash: #777571;
-  --color-bone: #c0bbb6;
-  --color-smoke: #a5a19c;
+  /*
+   * 紙と墨。
+   * オレンジ 1 色を主役にすると、どうしても「元気な販促アプリ」の顔になる。
+   * 落ち着いた温かみのある無彩色を地にして、色は「ここぞ」でしか使わない。
+   */
+  --paper: #f2f0ec;
+  --paper-raised: #fbfaf8;
+  --ink: #1c1b18;
+  --ink-deep: #0c0c0b;
+  --ink-soft: #55524c;
+  --ink-mute: #8b8780;
+  --hairline: #ddd9d2;
+  --hairline-strong: #c3bdb4;
 
   /*
-   * 状態を表す色。
-   * 「アクセントは 1 色」という原則はブランドの話で、警告や危険は別の軸。
-   * 「停めやすい／停めにくい」が見分けられなくなると案内として成立しないため、
-   * 色相は残しつつ、暖色に寄せてクリームの地になじませる。
+   * 差し色はくすんだテラコッタ 1 色。
+   * 使ってよいのは「1 位の駐車場」「目的地のピン」「選択中の印」だけ。
+   * ボタンを塗るのは墨で、差し色はボタンには使わない。
    */
-  --color-caution: #a8560a;
-  --color-caution-bg: #fdf3e3;
-  --color-danger: #b0361f;
-  --color-danger-bg: #fbeeea;
+  --accent: #8f4a2a;
 
-  --font-sans: 'Inter', system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
-  --font-display: 'Instrument Serif', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
-  --tracking: 0.015em;
+  /*
+   * 状態を表す色。ブランドの色とは別の軸として残す。
+   * 「停めやすい／停めにくい」が見分けられなくなると案内として成立しないため、
+   * 彩度を落として地になじませたうえで、色相だけは残す。
+   */
+  --caution: #7d5a1e;
+  --danger: #8c3320;
 
-  --radius-card: 20px;
-  --radius-control: 16px;
+  --font-sans: 'Inter', 'Noto Sans JP', system-ui, -apple-system, 'Hiragino Sans', sans-serif;
+  --font-display: 'Shippori Mincho', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+
+  /* 和文は少し字間を空けたほうが落ち着く */
+  --tracking: 0.03em;
+  /* 小さいラベルは大きく空けて、書体ではなく間で格を出す */
+  --tracking-label: 0.16em;
+
+  /* 角は「ほぼ立てる」。丸めるほど気軽な見た目になる */
+  --radius-card: 4px;
+  --radius-control: 3px;
   --radius-pill: 999px;
 
-  --shadow-button: rgb(0 0 0 / 0.2) 0 1px 4px 0;
-  --shadow-card: rgb(250 166 0 / 0.25) 6px 4px 24px 0;
+  /* 影は落とさない。線と余白だけで層をつくる */
+  --shadow-lift: 0 1px 2px rgb(28 27 24 / 0.04);
 
-  /* ---- 画面で使う名前 ---- */
-  --bg: var(--color-cream-canvas);
-  --surface: var(--color-paper-white);
-  --border: var(--color-bone);
-  --divider: var(--color-mist-gray);
-  --text: var(--color-ink-black);
-  --muted: var(--color-warm-stone);
-  --brand: var(--color-harvest-flame);
-  --brand-dark: #d94f00;
   color-scheme: light;
 }
 
@@ -54,12 +53,12 @@
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--paper);
+  color: var(--ink);
   font-family: var(--font-sans);
-  /* 幾何学的なサンセリフを少し広げると、硬さが取れて読みやすくなる */
+  font-size: 14px;
+  line-height: 1.65;
   letter-spacing: var(--tracking);
-  font-feature-settings: 'ss01' on, 'cv11' on;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -69,70 +68,71 @@ body {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: var(--paper);
 }
 
 /* ---------- header ---------- */
 /*
- * 画面で唯一のセリフ体。
- * 機能部分はすべてサンセリフで淡々と、ここだけ表情を出す。
+ * 画面で唯一の明朝。和文の見出しなので、欧文セリフではなく日本語の明朝を当てる。
+ * （欧文セリフを指定してもカタカナには効かず、結局ゴシックのままになる）
  */
 .header {
-  padding: 28px 16px 16px;
+  padding: 32px 20px 18px;
+  border-bottom: 1px solid var(--hairline);
+}
+.header__eyebrow {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-mute);
 }
 .header__title {
-  margin: 0;
+  margin: 10px 0 0;
   font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 40px;
-  line-height: 1.2;
-  letter-spacing: 0;
-}
-.header__title::after {
-  content: '';
-  display: block;
-  width: 48px;
-  height: 3px;
-  margin-top: 10px;
-  border-radius: var(--radius-pill);
-  background: var(--brand);
+  font-weight: 500;
+  font-size: 27px;
+  line-height: 1.35;
+  letter-spacing: 0.12em;
 }
 .header__sub {
   margin: 8px 0 0;
-  font-size: 13px;
-  line-height: 1.35;
-  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-mute);
 }
 
 .main {
   flex: 1;
-  padding: 0 16px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.panel {
-  background: var(--surface);
-  border: 0;
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  padding: 18px 16px;
+  padding: 16px 20px 28px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.panel {
+  background: var(--paper-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 /* ---------- form ---------- */
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
+/* 小さく、広く、薄く。見出しで主張させない */
 .field__label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--tracking-label);
+  color: var(--ink-mute);
 }
 .field__row {
   display: flex;
@@ -142,22 +142,27 @@ body {
 .select {
   flex: 1;
   min-width: 0;
-  padding: 14px 20px;
+  padding: 12px 14px;
   font-size: 16px;
+  font-family: inherit;
   color: inherit;
   letter-spacing: var(--tracking);
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--paper-raised);
+  border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-control);
+}
+.input::placeholder {
+  color: var(--ink-mute);
 }
 .input:focus,
 .select:focus {
-  outline: 2px solid var(--brand);
-  outline-offset: 4px;
+  outline: 0;
+  border-color: var(--ink);
+  box-shadow: inset 0 -1px 0 var(--ink);
 }
 .select {
   flex: 0 0 auto;
-  font-size: 14px;
+  font-size: 13px;
   padding: 8px 10px;
 }
 
@@ -165,10 +170,11 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
-  background: var(--color-cream-canvas);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
+  padding: 12px 14px;
+  background: none;
+  border: 1px solid var(--hairline);
+  border-left: 2px solid var(--ink);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
 }
 .chosen__text {
   flex: 1;
@@ -178,10 +184,11 @@ body {
 }
 .chosen__text strong {
   font-size: 15px;
+  font-weight: 500;
 }
 .chosen__text span {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--ink-mute);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -191,7 +198,7 @@ body {
   list-style: none;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--hairline);
   border-radius: var(--radius-control);
   overflow: hidden;
 }
@@ -205,64 +212,62 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   text-align: left;
-  background: var(--surface);
+  background: var(--paper-raised);
   border: 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--hairline);
   cursor: pointer;
   font: inherit;
 }
-.results li:last-child /* 新しい検索の途中は、前の結果を薄く出したままにして候補を消さない */
-.results--stale {
-  opacity: 0.55;
-  transition: opacity 0.15s ease;
-}
-.results__item {
+.results li:last-child .results__item {
   border-bottom: 0;
 }
 .results__item:hover,
 .results__item:focus-visible {
-  background: var(--color-marigold-glow);
+  background: var(--paper);
 }
 .results__item span {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--ink-mute);
 }
 
 .hint {
   margin: 0;
-  font-size: 13px;
-  color: var(--muted);
+  font-size: 12px;
+  color: var(--ink-mute);
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 .hint--error {
-  color: var(--color-danger);
+  color: var(--danger);
 }
 
+/*
+ * 注意書きは箱で囲わず、左の罫線 1 本で示す。
+ * 塗りの箱が増えるほど画面が騒がしくなる。
+ */
 .notfound {
-  border: 1px solid var(--color-marigold-glow);
-  background: var(--color-caution-bg);
-  border-radius: var(--radius-control);
-  padding: 12px;
+  border-left: 2px solid var(--caution);
+  padding: 2px 0 2px 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 .notfound__title {
   margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--color-caution);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: var(--tracking-label);
+  color: var(--caution);
 }
 .notfound__body {
   margin: 0;
   font-size: 12px;
-  line-height: 1.6;
-  color: var(--color-caution);
+  line-height: 1.8;
+  color: var(--ink-soft);
 }
 /* 何を試したかを見せる。見つからない理由を推測させないため */
 .tried {
@@ -273,46 +278,47 @@ body {
   flex-direction: column;
   gap: 2px;
   font-size: 11px;
-  color: var(--color-caution);
+  color: var(--ink-soft);
 }
 .tried li::before {
-  content: '✓ ';
+  content: '— ';
+  color: var(--ink-mute);
 }
 .tried--skipped {
-  color: var(--muted);
+  color: var(--ink-mute);
 }
 .tried--failed {
-  color: var(--color-danger);
+  color: var(--danger);
 }
 .tried .tried--failed::before {
   content: '× ';
+  color: var(--danger);
 }
 .tried .tried--skipped::before {
-  content: '– ';
+  content: '· ';
 }
 /* 名前が一致しない候補。結果と同列に見せない */
 .nearmiss {
-  border-top: 1px solid var(--color-marigold-glow);
-  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+  padding-top: 10px;
   flex: 1 0 100%;
 }
 .nearmiss summary {
   font-size: 12px;
-  color: var(--color-caution);
+  color: var(--ink-soft);
   cursor: pointer;
 }
 .nearmiss__note {
   margin: 6px 0;
   font-size: 11px;
-  color: var(--color-caution);
+  color: var(--ink-mute);
 }
 .notfound__body--warn {
-  font-weight: 700;
+  color: var(--caution);
 }
 .notfound__wide {
   flex: 1 0 100%;
-  font-size: 14px;
-  padding: 11px;
+  font-size: 13px;
 }
 .notfound__actions {
   display: flex;
@@ -323,7 +329,7 @@ body {
   flex: 1;
   text-align: center;
   text-decoration: none;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .banner {
@@ -333,68 +339,67 @@ body {
   gap: 10px;
   padding: 12px 14px;
   border-radius: var(--radius-card);
-  background: var(--color-marigold-glow);
-  border: 1px solid var(--brand);
+  background: var(--paper-raised);
+  border: 1px solid var(--ink);
 }
 .banner p {
   margin: 0;
-  font-size: 13px;
-  color: var(--brand-dark);
-  font-weight: 700;
+  font-size: 12px;
+  color: var(--ink);
 }
 
 /* ---------- Yahoo! の設定 ---------- */
 .yahoo {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  padding: 10px 12px;
+  border-top: 1px solid var(--hairline);
+  padding-top: 14px;
 }
 .yahoo__summary {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: var(--tracking-label);
+  color: var(--ink-soft);
   cursor: pointer;
 }
 .yahoo__off {
   font-size: 10px;
   font-weight: 400;
-  padding: 2px 6px;
+  letter-spacing: var(--tracking);
+  padding: 1px 8px;
   border-radius: var(--radius-pill);
-  background: var(--color-cream-canvas);
-  color: var(--muted);
-  border: 1px solid var(--border);
+  color: var(--ink-mute);
+  border: 1px solid var(--hairline);
 }
 .yahoo__note {
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   font-size: 11px;
-  line-height: 1.7;
-  color: var(--muted);
+  line-height: 1.9;
+  color: var(--ink-mute);
 }
 .yahoo__form {
   display: flex;
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 .yahoo__form .input {
   font-size: 14px;
-  padding: 8px 10px;
+  padding: 9px 12px;
 }
 .yahoo__form .btn {
   flex: 0 0 auto;
-  padding: 8px 14px;
-  font-size: 13px;
+  padding: 9px 16px;
+  font-size: 12px;
 }
 
 /* ---------- toggle ---------- */
 .toggle {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
+  gap: 14px;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--hairline);
   cursor: pointer;
 }
 .toggle input {
@@ -405,174 +410,184 @@ body {
 }
 .toggle__track {
   flex: 0 0 auto;
-  width: 46px;
-  height: 27px;
+  width: 40px;
+  height: 22px;
   border-radius: var(--radius-pill);
-  background: var(--color-smoke);
-  transition: background 0.15s ease;
+  background: none;
+  border: 1px solid var(--hairline-strong);
+  transition: background 0.18s ease, border-color 0.18s ease;
   display: flex;
   align-items: center;
-  padding: 3px;
+  padding: 2px;
 }
 .toggle__thumb {
-  width: 21px;
-  height: 21px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: var(--color-paper-white);
-  box-shadow: var(--shadow-button);
-  transition: transform 0.15s ease;
+  background: var(--hairline-strong);
+  transition: transform 0.18s ease, background 0.18s ease;
 }
 .toggle input:checked + .toggle__track {
-  background: var(--brand);
+  background: var(--ink);
+  border-color: var(--ink);
 }
 .toggle input:checked + .toggle__track .toggle__thumb {
-  transform: translateX(19px);
+  background: var(--paper-raised);
+  transform: translateX(18px);
 }
 .toggle input:focus-visible + .toggle__track {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
+  outline: 1px solid var(--ink);
+  outline-offset: 3px;
 }
 .toggle__text {
   display: flex;
   flex-direction: column;
 }
+.toggle__text strong {
+  font-size: 14px;
+  font-weight: 500;
+}
 .toggle__text span {
-  font-size: 12px;
-  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-mute);
 }
 
 /* ---------- filters ---------- */
 .filters {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 .filters__selects {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   flex-wrap: wrap;
 }
 .filters__row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--muted);
+  gap: 10px;
+  font-size: 11px;
+  letter-spacing: var(--tracking-label);
+  color: var(--ink-mute);
 }
 .filters__chips {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 .chip {
-  padding: 6px 12px;
-  font-size: 13px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 12px;
   border-radius: var(--radius-pill);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--muted);
+  border: 1px solid var(--hairline-strong);
+  background: none;
+  color: var(--ink-soft);
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
+/* 選択中は差し色ではなく墨で塗る。差し色は駐車場の順位のために取っておく */
 .chip--on {
-  background: var(--color-marigold-glow);
-  border-color: var(--brand);
-  color: var(--brand-dark);
-  font-weight: 700;
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper-raised);
 }
 
 /* ---------- サイズ制限 ---------- */
 .limits {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 .limits__title {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: var(--tracking-label);
+  color: var(--ink-mute);
 }
 .limit {
   font-size: 11px;
-  padding: 2px 7px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border);
-  background: var(--color-cream-canvas);
-  color: var(--color-ironwood);
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline);
+  color: var(--ink-soft);
 }
 /* 登録が無いだけで、制限が無いとは限らない。薄く出す */
 .limit--unknown {
-  color: var(--muted);
-  background: none;
+  color: var(--ink-mute);
   border-style: dashed;
 }
 .limit--tight {
-  color: var(--color-caution);
-  background: var(--color-caution-bg);
-  border-color: var(--color-marigold-glow);
-  font-weight: 700;
+  color: var(--caution);
+  border-color: var(--caution);
 }
 .limits__note {
   margin: 0;
   font-size: 10px;
-  color: var(--muted);
+  line-height: 1.7;
+  color: var(--ink-mute);
 }
 
 /* ---------- 停めやすさ ---------- */
 .ease {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
+/*
+ * 塗りをやめて枠線と文字色だけで示す。
+ * 塗りつぶしのバッジが並ぶと、それだけで安っぽくなる。
+ */
 .ease__label {
-  font-size: 12px;
-  font-weight: 700;
-  padding: 2px 8px;
+  font-size: 11px;
+  letter-spacing: var(--tracking-label);
+  padding: 1px 10px;
   border-radius: var(--radius-pill);
+  border: 1px solid currentColor;
 }
 .ease__label--good {
-  background: var(--color-marigold-glow);
-  color: var(--color-ink-black);
-  border: 1px solid var(--color-parchment-shadow);
+  color: var(--ink);
 }
 .ease__label--fair {
-  background: var(--color-cream-canvas);
-  color: var(--color-ironwood);
-  border: 1px solid var(--border);
+  color: var(--ink-mute);
 }
 .ease__label--poor {
-  background: var(--color-danger-bg);
-  color: var(--color-danger);
-  /* 淡い暖色どうしだと「停めやすい」と見分けがつかないので、枠まで赤にする */
-  border: 1px solid var(--color-danger);
+  color: var(--danger);
 }
 .ease__notes {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-mute);
 }
 
 /* ---------- fee / warnings ---------- */
 .card__fee {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 10px;
 }
+/* 金額は明朝。数字が入るところだけ表情を持たせる */
 .fee {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink);
 }
 .fee--unknown {
-  font-size: 14px;
-  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-mute);
 }
 .fee--free {
-  color: var(--color-ink-black);
+  color: var(--ink);
 }
 .fee__note {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-mute);
 }
 .warnings {
   list-style: none;
@@ -580,21 +595,19 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 .warning {
   font-size: 11px;
-  color: var(--color-caution);
-  background: var(--color-caution-bg);
-  border: 1px solid var(--color-marigold-glow);
-  border-radius: var(--radius-control);
-  padding: 3px 8px;
+  line-height: 1.7;
+  color: var(--caution);
+  border-left: 2px solid var(--caution);
+  padding: 0 0 0 10px;
 }
 /* 断定できない注意書き。警告より一段弱く見せる */
 .warning--soft {
-  color: var(--color-warm-stone);
-  background: var(--color-cream-canvas);
-  border-color: var(--border);
+  color: var(--ink-mute);
+  border-left-color: var(--hairline-strong);
 }
 
 /* ---------- parking cards ---------- */
@@ -604,31 +617,32 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 .card {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--divider);
+  border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
   overflow: hidden;
-  background: var(--surface);
+  background: var(--paper-raised);
 }
 .card__row {
   display: flex;
   align-items: stretch;
 }
+/* 選択中は左端の 1 本だけ差し色にする */
 .card--selected {
-  border-color: var(--brand);
-  box-shadow: var(--shadow-card);
+  border-color: var(--hairline-strong);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 .card__main {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
+  gap: 10px;
+  padding: 16px;
   text-align: left;
   background: none;
   border: 0;
@@ -637,8 +651,8 @@ body {
 }
 .card__head {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: baseline;
+  gap: 12px;
 }
 .card__title {
   flex: 1;
@@ -648,13 +662,16 @@ body {
 }
 .card__title strong {
   font-size: 15px;
+  font-weight: 500;
+  line-height: 1.5;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .card__meta {
   font-size: 12px;
-  color: var(--muted);
+  line-height: 1.6;
+  color: var(--ink-mute);
 }
 /* 住所や運営者。名前を補う情報なので一段小さく */
 .card__meta--sub {
@@ -663,27 +680,26 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 丸バッジをやめて明朝の数字だけにする。1 位だけ差し色 */
 .rank {
   flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--color-mist-gray);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
+  width: 18px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  line-height: 1;
+  text-align: center;
+  color: var(--ink-mute);
 }
 .rank--top {
-  background: var(--brand);
-  color: var(--color-paper-white);
+  color: var(--accent);
 }
 .score {
   flex: 0 0 auto;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--brand);
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--ink);
   letter-spacing: 0;
 }
 .tags {
@@ -691,110 +707,132 @@ body {
   margin: 0;
   padding: 0;
   display: flex;
-  gap: 6px;
+  gap: 4px 10px;
   flex-wrap: wrap;
-}
-.tag {
   font-size: 11px;
-  padding: 3px 8px;
-  border-radius: var(--radius-pill);
-  background: var(--color-cream-canvas);
-  color: var(--color-ironwood);
+  color: var(--ink-mute);
+}
+/* 理由は箱に入れず、中黒で区切った一文のように並べる */
+.tag + .tag::before {
+  content: '';
+  display: inline-block;
+  width: 1px;
+  height: 9px;
+  margin-right: 10px;
+  vertical-align: -1px;
+  background: var(--hairline-strong);
 }
 .card__link {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  padding: 0 12px;
-  font-size: 12px;
+  padding: 0 16px;
+  font-size: 11px;
+  letter-spacing: var(--tracking-label);
   line-height: 1.4;
   text-align: center;
   white-space: pre-line;
-  color: var(--brand);
+  color: var(--ink-soft);
   text-decoration: none;
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--hairline);
+}
+.card__link:hover {
+  background: var(--paper);
 }
 
 /* どの情報源から何件取れたか。効いているかを確かめられるように出す */
 .sources {
   margin: 0;
   font-size: 11px;
-  line-height: 1.6;
-  color: var(--muted);
+  line-height: 1.8;
+  color: var(--ink-mute);
 }
 
 .coverage {
   margin: 0;
   font-size: 12px;
-  line-height: 1.6;
-  color: var(--color-caution);
-  background: var(--color-caution-bg);
-  border: 1px solid var(--color-marigold-glow);
-  border-radius: var(--radius-control);
-  padding: 8px 10px;
+  line-height: 1.8;
+  color: var(--ink-soft);
+  border-left: 2px solid var(--caution);
+  padding: 0 0 0 12px;
 }
 
+/* ---------- ルートの手順 ---------- */
 .steps {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  counter-reset: step;
+}
+/* ①② のような記号を使わず、明朝の連番を添える */
+.steps .btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.steps .btn::before {
+  counter-increment: step;
+  content: counter(step, decimal-leading-zero);
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  opacity: 0.55;
 }
 .steps__note {
   margin: 0;
   font-size: 11px;
-  color: var(--muted);
-  line-height: 1.5;
-}
-.badge--yahoo {
-  background: var(--color-marigold-glow);
-  color: var(--brand-dark);
-  border-color: var(--color-parchment-shadow);
+  color: var(--ink-mute);
+  line-height: 1.7;
 }
 .badge {
   font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
+  font-weight: 400;
+  letter-spacing: var(--tracking-label);
+  padding: 1px 8px;
   border-radius: var(--radius-pill);
-  background: var(--color-marigold-glow);
-  color: var(--color-ink-black);
-  border: 1px solid var(--color-parchment-shadow);
+  color: var(--ink-soft);
+  border: 1px solid var(--hairline-strong);
+}
+.badge--yahoo {
+  color: var(--ink-mute);
+  border-color: var(--hairline);
 }
 
 /* 料金まわりの導線。調べる → 登録する の並びにする */
 .feeactions {
   display: flex;
-  border-top: 1px solid var(--border);
-  background: var(--color-cream-canvas);
+  border-top: 1px solid var(--hairline);
 }
 .feeactions__item {
   flex: 1;
-  padding: 9px 12px;
+  padding: 11px 12px;
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
+  letter-spacing: var(--tracking-label);
   text-align: center;
   text-decoration: none;
-  color: var(--brand);
+  color: var(--ink-soft);
   background: none;
   border: 0;
   cursor: pointer;
 }
 .feeactions__item + .feeactions__item {
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--hairline);
 }
 .feeactions__item:hover {
-  background: var(--color-marigold-glow);
+  background: var(--paper);
 }
 .feeform {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  background: var(--color-cream-canvas);
-  border-top: 1px solid var(--border);
+  gap: 8px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--hairline);
 }
 .feeform__label {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-mute);
 }
 .feeform__row {
   display: flex;
@@ -802,78 +840,90 @@ body {
 }
 .feeform__row .input {
   font-size: 14px;
-  padding: 8px 10px;
+  padding: 9px 12px;
 }
 .feeform__row .btn {
   flex: 0 0 auto;
-  padding: 8px 12px;
-  font-size: 13px;
+  padding: 9px 14px;
+  font-size: 12px;
 }
 
 /* ---------- map ---------- */
 .map {
   height: 300px;
   border-radius: var(--radius-card);
-  border: 1px solid var(--border);
+  border: 1px solid var(--hairline);
   overflow: hidden;
   z-index: 0;
 }
+/* 地図の彩度を少し落として周りの紙になじませる。ピンには効かせない */
+.map .leaflet-tile-pane {
+  filter: saturate(0.75) contrast(0.94) brightness(1.02);
+}
 .map--picking {
   cursor: crosshair;
-  border-color: var(--brand);
-  box-shadow: var(--shadow-card);
+  border-color: var(--ink);
 }
 .pin {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--color-paper-white);
-  border: 2px solid var(--color-paper-white);
-  box-shadow: var(--shadow-button);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--paper-raised);
+  background: var(--ink-mute);
+  border: 1.5px solid var(--paper-raised);
+  box-shadow: var(--shadow-lift);
 }
 .pin--destination {
-  background: var(--color-danger);
+  background: var(--accent);
 }
 .pin--origin {
-  background: var(--color-ink-black);
+  background: var(--ink);
 }
 .pin--parking {
-  background: var(--color-smoke);
+  background: var(--ink-mute);
 }
 .pin--parking-selected {
-  background: var(--brand);
-  transform: scale(1.15);
+  background: var(--ink);
+  transform: scale(1.18);
 }
 
 /* ---------- empty ---------- */
 .empty {
-  padding: 28px 16px;
+  padding: 44px 20px;
   text-align: center;
-  color: var(--muted);
-  background: var(--surface);
-  border: 1px dashed var(--border);
+  color: var(--ink-mute);
+  border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
 }
 .empty p {
   margin: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
 }
 .empty__note {
-  margin-top: 6px !important;
-  font-size: 12px;
+  margin-top: 10px !important;
+  font-family: var(--font-sans) !important;
+  font-size: 11px !important;
+  letter-spacing: var(--tracking) !important;
+  line-height: 1.8;
+  color: var(--ink-mute) !important;
 }
 
 /* ---------- footer / summary ---------- */
 .footer {
   position: sticky;
   bottom: 0;
-  padding: 0 16px calc(12px + env(safe-area-inset-bottom));
-  background: rgb(255 255 255 / 0.94);
-  backdrop-filter: blur(8px);
-  border-top: 1px solid var(--border);
+  padding: 0 20px calc(14px + env(safe-area-inset-bottom));
+  background: rgb(251 250 248 / 0.93);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--hairline-strong);
 }
 
 /* つまんで上下に払える帯。タップでも開閉できる */
@@ -881,9 +931,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 8px 0 10px;
+  padding: 10px 0 12px;
   background: none;
   border: 0;
   cursor: grab;
@@ -891,61 +941,98 @@ body {
   touch-action: none;
 }
 .footer__grip {
-  width: 40px;
-  height: 4px;
-  border-radius: var(--radius-pill);
-  background: var(--color-smoke);
+  width: 32px;
+  height: 1px;
+  background: var(--hairline-strong);
   flex: 0 0 auto;
 }
 .footer__peek {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: var(--tracking-label);
+  color: var(--ink-soft);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .footer--collapsed .footer__handle {
-  padding: 10px 0;
+  padding: 12px 0;
 }
 .summary {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
+
+/*
+ * 経路の 3 行。絵文字ではなく、縦の罫線でつないだ行程表にする。
+ */
 .legs {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 .leg {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: baseline;
+  gap: 12px;
+  padding: 0 0 10px;
   font-size: 13px;
+}
+.leg:last-child {
+  padding-bottom: 0;
+}
+/* 行と行をつなぐ縦線 */
+.leg:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 12px;
+  bottom: 0;
+  width: 1px;
+  background: var(--hairline-strong);
+}
+.leg__kind {
+  position: relative;
+  flex: 0 0 auto;
+  width: 11px;
+  align-self: flex-start;
+  margin-top: 6px;
+  height: 7px;
+}
+.leg__kind::after {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid var(--ink-mute);
+  background: var(--paper-raised);
+}
+/* 目的地の点だけ塗って、行程の終わりを分かるようにする */
+.leg--goal .leg__kind::after {
+  background: var(--ink);
+  border-color: var(--ink);
 }
 .leg div {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: baseline;
+  flex-wrap: wrap;
   min-width: 0;
 }
 .leg strong {
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .leg span {
-  color: var(--muted);
-  font-size: 12px;
+  color: var(--ink-mute);
+  font-size: 11px;
   flex: 0 0 auto;
-}
-.leg__icon {
-  flex: 0 0 auto;
-  font-size: 15px;
 }
 .summary__secondary {
   display: flex;
@@ -958,52 +1045,124 @@ body {
 
 /* ---------- buttons ---------- */
 .btn {
-  padding: 12px 20px;
+  padding: 11px 18px;
   border-radius: var(--radius-control);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
+  border: 1px solid var(--hairline-strong);
+  background: none;
+  color: var(--ink);
   font: inherit;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: var(--tracking);
+  letter-spacing: var(--tracking-label);
   cursor: pointer;
   white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.btn:hover {
+  border-color: var(--ink);
 }
 .btn:disabled {
-  opacity: 0.6;
+  opacity: 0.45;
   cursor: default;
-}
-.btn--primary {
-  background: var(--brand);
-  border-color: var(--brand);
-  color: var(--color-paper-white);
-  font-weight: 600;
-  font-size: 16px;
-  padding: 14px 24px;
-  box-shadow: var(--shadow-button);
 }
 
 /*
- * 塗りのオレンジは画面に 1 つだけにする。
- * 並べると、どれが本命の操作か分からなくなる。
+ * 主要な操作は墨で塗る。差し色では塗らない。
+ * 塗るボタンは画面に 1 つだけ。
  */
-.btn--outline {
-  background: var(--surface);
-  color: var(--brand);
-  border-color: var(--brand);
-  box-shadow: none;
-}
-.btn--outline:hover {
-  background: var(--color-marigold-glow);
+.btn--primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper-raised);
+  font-size: 13px;
+  padding: 15px 22px;
 }
 .btn--primary:hover {
-  background: var(--brand-dark);
+  background: var(--ink-deep);
+  border-color: var(--ink-deep);
+}
+.btn--outline {
+  background: none;
+  color: var(--ink);
+  border-color: var(--hairline-strong);
+}
+.btn--outline:hover {
+  background: none;
+  border-color: var(--ink);
 }
 .btn--ghost {
-  color: var(--brand);
-  background: var(--surface);
+  color: var(--ink-soft);
+  background: none;
+  border-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--hairline-strong);
+}
+.btn--ghost:hover {
+  color: var(--ink);
+  border-color: transparent;
+  text-decoration-color: var(--ink);
 }
 .btn--block {
   width: 100%;
+}
+
+/*
+ * Leaflet の既定の見た目（青いリンク・白いボタン・丸い影）が
+ * そのままだと浮くので、紙と墨に合わせて上書きする。
+ */
+.map.leaflet-container {
+  font-family: var(--font-sans);
+  background: var(--paper);
+}
+.map .leaflet-control-attribution {
+  background: rgb(251 250 248 / 0.86);
+  color: var(--ink-mute);
+  font-size: 9px;
+  letter-spacing: 0;
+  padding: 1px 6px;
+}
+.map .leaflet-control-attribution a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.map .leaflet-control-attribution svg,
+.map .leaflet-attribution-flag {
+  display: none;
+}
+.map .leaflet-bar {
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-control);
+  box-shadow: none;
+  overflow: hidden;
+}
+.map .leaflet-bar a {
+  width: 28px;
+  height: 28px;
+  line-height: 27px;
+  background: rgb(251 250 248 / 0.92);
+  color: var(--ink-soft);
+  border: 0;
+  border-radius: 0;
+  font-weight: 400;
+}
+.map .leaflet-bar a + a {
+  border-top: 1px solid var(--hairline);
+}
+.map .leaflet-bar a:hover {
+  background: var(--paper-raised);
+  color: var(--ink);
+}
+.map .leaflet-tooltip {
+  background: var(--ink);
+  color: var(--paper-raised);
+  border: 0;
+  border-radius: var(--radius-control);
+  box-shadow: none;
+  font-size: 11px;
+  letter-spacing: var(--tracking);
+  padding: 4px 8px;
+}
+.map .leaflet-tooltip-top::before {
+  border-top-color: var(--ink);
 }

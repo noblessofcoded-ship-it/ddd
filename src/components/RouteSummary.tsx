@@ -31,14 +31,14 @@ export function RouteSummary({ origin, destination, parking, stayMinutes }: Prop
       <section className="summary">
         <ol className="legs">
           <li className="leg">
-            <span className="leg__icon">🚗</span>
+            <span className="leg__kind" aria-hidden="true" />
             <div>
               <strong>{originLabel}</strong>
               <span>から</span>
             </div>
           </li>
-          <li className="leg">
-            <span className="leg__icon">📍</span>
+          <li className="leg leg--goal">
+            <span className="leg__kind" aria-hidden="true" />
             <div>
               <strong>{destination.name}</strong>
               <span>まで直行</span>
@@ -63,21 +63,21 @@ export function RouteSummary({ origin, destination, parking, stayMinutes }: Prop
     <section className="summary">
       <ol className="legs">
         <li className="leg">
-          <span className="leg__icon">🚗</span>
+          <span className="leg__kind" aria-hidden="true" />
           <div>
             <strong>{originLabel}</strong>
             <span>から車で</span>
           </div>
         </li>
         <li className="leg">
-          <span className="leg__icon">🅿️</span>
+          <span className="leg__kind" aria-hidden="true" />
           <div>
             <strong>{parking.name}</strong>
             <span>に駐車・{parkingNote(parking, stayMinutes)}</span>
           </div>
         </li>
-        <li className="leg">
-          <span className="leg__icon">🚶</span>
+        <li className="leg leg--goal">
+          <span className="leg__kind" aria-hidden="true" />
           <div>
             <strong>{destination.name}</strong>
             <span>
@@ -95,14 +95,14 @@ export function RouteSummary({ origin, destination, parking, stayMinutes }: Prop
             open(buildDirectionsUrl({ origin, destination, parking, mode: 'to-parking' }))
           }
         >
-          ① 🚗 駐車場までの経路を見る
+          駐車場までの経路を見る
         </button>
         <button
           type="button"
           className="btn btn--primary btn--outline btn--block"
           onClick={() => open(buildWalkUrl(parking, destination))}
         >
-          ② 🚶 駐車場から目的地までの経路を見る
+          駐車場から目的地まで歩く経路を見る
         </button>
       </div>
 
@@ -115,7 +115,7 @@ export function RouteSummary({ origin, destination, parking, stayMinutes }: Prop
         className="btn btn--ghost btn--block"
         onClick={() => open(buildDirectionsUrl({ origin, destination, parking, mode: 'via-parking' }))}
       >
-        🗺 駐車場を経由地にして目的地まで（すべて車）
+        駐車場を経由地にして目的地まで（すべて車）
       </button>
     </section>
   );
