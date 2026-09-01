@@ -217,14 +217,14 @@ export function ParkingCard({
             target="_blank"
             rel="noreferrer noopener"
           >
-            🔍 料金を調べる
+            料金を調べる
           </a>
           <button
             type="button"
             className="feeactions__item"
             onClick={() => setEditing(true)}
           >
-            ✏️ {lot.feeSource === 'user' ? '料金を直す' : '料金を登録'}
+            {lot.feeSource === 'user' ? '料金を直す' : '料金を登録'}
           </button>
         </div>
       )}

@@ -96,9 +96,12 @@ export function MapView({ destination, origin, lots, selectedId, onSelect, onPic
     const selected = lots.find((lot) => lot.id === selectedId);
     if (selected && destination) {
       L.polyline([selected, destination], {
-        color: '#2563eb',
-        weight: 3,
-        dashArray: '6 6',
+        // 地図の上でも差し色は使わない。墨の破線で歩く区間を示す
+        color: '#1c1b18',
+        weight: 2,
+        opacity: 0.75,
+        dashArray: '2 5',
+        lineCap: 'round',
         interactive,
       }).addTo(layer);
     }
